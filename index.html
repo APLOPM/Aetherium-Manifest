@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AETHERIUM Light Control Kernel v3</title>
+  <title>AETHERIUM Light Control Kernel v4</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
 
@@ -39,8 +39,6 @@
       z-index: 1;
     }
 
-    canvas#memory-layer { display: none; }
-
     #hud {
       position: absolute;
       top: 18px;
@@ -59,55 +57,10 @@
       font-size: 11px;
       color: var(--muted);
       letter-spacing: 2px;
+      text-transform: uppercase;
       border-bottom: 1px solid rgba(255,255,255,0.08);
       padding-bottom: 6px;
       margin-bottom: 12px;
-    }
-
-    .fsm-track {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
-    }
-
-    .fsm-node {
-      position: relative;
-      flex: 1;
-      height: 4px;
-      background: #1f2937;
-      border-radius: 999px;
-      transition: 0.2s ease;
-    }
-
-    .fsm-node.active {
-      background: var(--blue);
-      box-shadow: 0 0 10px rgba(0,229,255,0.85);
-    }
-
-    .fsm-label {
-      position: absolute;
-      top: 9px;
-      left: 0;
-      font-size: 9px;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-
-    .fsm-node.active .fsm-label { color: #fff; }
-
-    .metric {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      font-size: 11px;
-      margin-bottom: 6px;
-    }
-
-    .metric .val {
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      text-align: right;
     }
 
     textarea {
@@ -152,74 +105,87 @@
     .full { grid-column: 1 / -1; }
 
     .schema-box {
-      max-height: 180px;
+      max-height: 240px;
       overflow: auto;
       font-size: 10px;
       line-height: 1.45;
-      background: rgba(255,255,255,0.025);
+      background: rgba(0,0,0,0.2);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 8px;
       padding: 10px;
       white-space: pre-wrap;
       user-select: text;
     }
-
-    .pill {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.12);
-      font-size: 10px;
-      color: var(--muted);
-      margin-right: 6px;
-    }
   </style>
 </head>
 <body>
   <canvas id="display-layer"></canvas>
-  <canvas id="memory-layer"></canvas>
 
   <div id="hud">
-    <div class="section-title">AETHERIUM LIGHT CONTROL KERNEL v3</div>
+    <div class="section-title">Aetherium Light Control Kernel v4</div>
 
-    <div class="fsm-track">
-      <div class="fsm-node active" id="fsm-IDLE"><div class="fsm-label">IDLE</div></div>
-      <div class="fsm-node" id="fsm-PARSE"><div class="fsm-label">PARSE</div></div>
-      <div class="fsm-node" id="fsm-RETRIEVE"><div class="fsm-label">RETRIEVE</div></div>
-      <div class="fsm-node" id="fsm-COMPILE"><div class="fsm-label">COMPILE</div></div>
-      <div class="fsm-node" id="fsm-FORMING"><div class="fsm-label">FORMING</div></div>
-      <div class="fsm-node" id="fsm-RESONATE"><div class="fsm-label">RESONATE</div></div>
-      <div class="fsm-node" id="fsm-FEEDBACK"><div class="fsm-label">FEEDBACK</div></div>
-    </div>
-
-    <div class="section-title">USER REQUEST</div>
+    <div class="section-title">User Request</div>
     <textarea id="txt-request">สร้างรูปทรงเกลียวสีทองอมม่วง ค่อยๆ ลอยขึ้นอย่างสงบ เหมือน AI กำลังคิดอย่างลึกซึ้ง</textarea>
 
     <div class="btn-grid">
-      <button onclick="runUserRequest()">RUN REQUEST</button>
-      <button onclick="resetToVoid()">RESET VOID</button>
-      <button onclick="quickPreset('sphere')">PRESET SPHERE</button>
-      <button onclick="quickPreset('flower')">PRESET FLOWER</button>
-      <button onclick="quickPreset('vortex')">PRESET VORTEX</button>
-      <button onclick="quickPreset('fracture')">PRESET FRACTURE</button>
-      <button class="full" onclick="showSchema()">SHOW LCL SCHEMA</button>
+      <button id="btn-run">RUN REQUEST</button>
+      <button id="btn-reset">RESET VOID</button>
+      <button class="full" id="btn-schema">SHOW CURRENT LCL</button>
     </div>
 
-    <div style="margin-top: 16px" class="section-title">RUNTIME</div>
-    <div class="metric"><span>Kernel State</span><span class="val" id="val-state">IDLE</span></div>
-    <div class="metric"><span>Render Mode</span><span class="val" id="val-render">void</span></div>
-    <div class="metric"><span>Archetype</span><span class="val" id="val-arch">none</span></div>
-    <div class="metric"><span>Targets</span><span class="val" id="val-targets">0</span></div>
-    <div class="metric"><span>Coherence</span><span class="val" id="val-coh">0.10</span></div>
-    <div class="metric"><span>FlowMag</span><span class="val" id="val-flow">1.00</span></div>
-    <div class="metric"><span>Readability</span><span class="val" id="val-read">0.00</span></div>
-    <div class="metric"><span>Coverage</span><span class="val" id="val-cover">0.00</span></div>
-    <div class="metric"><span>Stability</span><span class="val" id="val-stab">0.00</span></div>
-
     <div style="margin-top: 16px" class="section-title">LCL</div>
-    <div class="schema-box" id="schema-view">กด RUN REQUEST หรือ SHOW LCL SCHEMA</div>
+    <div class="schema-box" id="schema-view">Press RUN to generate LCL</div>
   </div>
 
-  <script type="module" src="kernel.js"></script>
+  <script type="module">
+    import { AetheriumKernel } from './kernel.js';
+
+    const canvas = document.getElementById('display-layer');
+    const schemaView = document.getElementById('schema-view');
+    const txtRequest = document.getElementById('txt-request');
+    
+    // --- Kernel Initialization ---
+    const kernel = new AetheriumKernel({
+      canvas: canvas,
+      // IMPORTANT: Replace with your actual backend endpoint
+      apiBaseUrl: 'http://localhost:8000', 
+      // IMPORTANT: Replace with the URL serving your formation manifest
+      formationBaseUrl: '.', 
+      evaluatorMode: 'local', // Use local evaluator for now
+    });
+    
+    const resizeObserver = new ResizeObserver(entries => {
+        const { width, height } = entries[0].contentRect;
+        kernel.resize(width, height);
+    });
+    resizeObserver.observe(canvas);
+    kernel.resize(canvas.clientWidth, canvas.clientHeight);
+    
+    kernel.start();
+
+    // --- UI Wiring ---
+    document.getElementById('btn-run').addEventListener('click', async () => {
+      schemaView.textContent = 'Interpreting with LLM...';
+      await kernel.handleUserLightRequest(txtRequest.value);
+      const lcl = kernel.getLCLSchema();
+      schemaView.textContent = lcl ? JSON.stringify(lcl, null, 2) : 'Failed to generate LCL.';
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      kernel.resetToVoid();
+      schemaView.textContent = 'Kernel reset. Ready for new request.';
+      txtRequest.value = 'สร้างรูปทรงเกลียวสีทองอมม่วง ค่อยๆ ลอยขึ้นอย่างสงบ เหมือน AI กำlingคิดอย่างลึกซึ้ง';
+    });
+    
+    document.getElementById('btn-schema').addEventListener('click', () => {
+        const lcl = kernel.getLCLSchema();
+        if (lcl) {
+            schemaView.textContent = JSON.stringify(lcl, null, 2);
+        } else {
+            schemaView.textContent = 'No LCL has been generated yet. Run a request first.';
+        }
+    });
+
+  </script>
 </body>
 </html>

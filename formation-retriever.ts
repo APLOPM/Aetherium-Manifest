@@ -1,148 +1,158 @@
-interface FormationRuntimeBias {
-  forceBias: number;
-  flowBias: number;
-  noiseBias: number;
-  coherenceStart: number;
-  archetypePhrase: string;
-}
+import {
+  FormationReference,
+  LightControlLanguage,
+  MotionArchetype,
+} from './light-control-language';
 
-interface FormationRecord {
+export interface FormationManifestEntry {
   id: string;
-  archetype: string;
-  phrase: string;
-  forceBias: number;
-  coherenceStart: number;
-  coherenceTarget: number;
-  flowBias: number;
-  noiseBias: number;
-  rhythm: number;
+  title: string;
+  archetype: MotionArchetype;
+  keywords: string[];
+  manifestPath?: string;
+  annotationPath?: string;
+  previewVideoPath?: string;
 }
 
-interface BookOfFormationData {
-  formations: FormationRecord[];
-  annotations: Record<string, Record<string, unknown>>;
-  videos: Record<string, Record<string, unknown>>;
+export interface FormationManifest {
+  formations: FormationManifestEntry[];
 }
 
-const DEFAULT_FORMATIONS: FormationRecord[] = [
-  { id: 'reasoning/spiral_convergence', archetype: 'reasoning', phrase: 'spiral inward then ascend', forceBias: 0.88, coherenceStart: 0.16, coherenceTarget: 0.86, flowBias: 0.75, noiseBias: 0.42, rhythm: 0.14 },
-  { id: 'stabilization/sphere_equilibrium', archetype: 'stabilization', phrase: 'settle into equilibrium', forceBias: 0.75, coherenceStart: 0.22, coherenceTarget: 0.9, flowBias: 0.3, noiseBias: 0.32, rhythm: 0.08 },
-  { id: 'fracture/fracture_shell', archetype: 'fracture', phrase: 'hold tension then split', forceBias: 0.62, coherenceStart: 0.52, coherenceTarget: 0.33, flowBias: 0.95, noiseBias: 1.15, rhythm: 0.4 },
-  { id: 'bloom/flower_shell', archetype: 'bloom', phrase: 'expand radially with grace', forceBias: 0.8, coherenceStart: 0.12, coherenceTarget: 0.78, flowBias: 0.68, noiseBias: 0.55, rhythm: 0.2 },
-  { id: 'emergence/nebula_birth', archetype: 'emergence', phrase: 'born from diffuse light', forceBias: 0.95, coherenceStart: 0.08, coherenceTarget: 0.82, flowBias: 0.85, noiseBias: 0.9, rhythm: 0.22 },
-];
-
-let cachedBookPromise: Promise<BookOfFormationData> | null = null;
-
-export async function FormationRetriever(lcl: any): Promise<any> {
-  const book = await loadBookOfFormation();
-  const key = lcl.motion?.archetype || 'emergence';
-  const found = book.formations.find((item) => item.archetype === key) ?? book.formations[0];
-  return {
-    ...found,
-    annotation: book.annotations[found.id] ?? null,
-    video: book.videos[found.id] ?? null,
-  };
+export interface FormationAnnotation {
+  id: string;
+  semanticTags?: string[];
+  preferredFamilies?: string[];
+  forceBias?: number;
+  flowBias?: number;
+  noiseBias?: number;
+  coherenceStart?: number;
+  notes?: string;
 }
 
-export function mergeFormationWithLCL(lcl: any, formation: any): any {
-  const merged = structuredClone(lcl);
-  merged.retrieved_formation = formation;
-  merged.motion.coherence_target = lcl.motion.coherence_target ?? formation.coherenceTarget;
-  merged.motion.rhythm_hz = lcl.motion.rhythm_hz ?? formation.rhythm;
-  const runtimeBias: FormationRuntimeBias = {
-    forceBias: formation.forceBias,
-    flowBias: formation.flowBias,
-    noiseBias: formation.noiseBias,
-    coherenceStart: formation.coherenceStart,
-    archetypePhrase: formation.phrase,
-  };
-  merged.runtime_bias = runtimeBias;
-  merged.content = {
-    ...(merged.content ?? {}),
-    formation_annotation: formation.annotation ?? null,
-    formation_video: formation.video ?? null,
-  };
-  return merged;
+export interface FormationBundle {
+  manifest: FormationManifest;
+  annotations: Record<string, FormationAnnotation>;
 }
 
-async function loadBookOfFormation(): Promise<BookOfFormationData> {
-  if (!cachedBookPromise) {
-    cachedBookPromise = fetchBookOfFormation().catch((error) => {
-      console.warn('Book of Formation fetch failed; falling back to embedded defaults', error);
-      return {
-        formations: DEFAULT_FORMATIONS,
-        annotations: {},
-        videos: {},
-      };
-    });
+export interface RetrievedFormation {
+  reference: FormationReference;
+  annotation?: FormationAnnotation;
+}
+
+export async function loadFormationBundle(baseUrl: string): Promise<FormationBundle> {
+  const manifestUrl = `${baseUrl}/manifest.yaml`;
+  // Assuming the .yaml file is served as JSON-compatible text.
+  const manifest = await fetchAndParseJson<FormationManifest>(manifestUrl);
+
+  const annotations: Record<string, FormationAnnotation> = {};
+  for (const formation of manifest.formations) {
+    if (!formation.annotationPath) continue;
+    try {
+      const annotation = await fetchAndParseJson<FormationAnnotation>(resolveAssetUrl(baseUrl, formation.annotationPath));
+      annotations[formation.id] = annotation;
+    } catch {
+      // tolerate missing annotations and continue
+    }
   }
 
-  return cachedBookPromise;
+  return { manifest, annotations };
 }
 
-async function fetchBookOfFormation(): Promise<BookOfFormationData> {
-  const [manifestText, annotationJson, videoJson] = await Promise.all([
-    fetch('/data/book_of_formation/manifest.yaml').then((r) => r.text()),
-    fetch('/data/book_of_formation/annotations.json').then((r) => r.json()),
-    fetch('/data/book_of_formation/videos.json').then((r) => r.json()),
+export function retrieveFormation(
+  bundle: FormationBundle,
+  lcl: LightControlLanguage,
+): RetrievedFormation | null {
+  const tags = new Set([
+    ...(lcl.content.semantic_tags ?? []),
+    lcl.motion.archetype,
+    lcl.morphology.family,
+    ...(lcl.source_text.toLowerCase().match(/[a-zA-Zก-๙_]+/g) ?? []),
   ]);
 
-  return {
-    formations: parseManifestYaml(manifestText),
-    annotations: annotationJson,
-    videos: videoJson,
-  };
-}
+  let best: RetrievedFormation | null = null;
 
-function parseManifestYaml(text: string): FormationRecord[] {
-  const lines = text.split('\n');
-  const records: FormationRecord[] = [];
-  let current: Partial<FormationRecord> | null = null;
+  for (const entry of bundle.manifest.formations) {
+    const annotation = bundle.annotations[entry.id];
+    const score = scoreFormation(entry, annotation, tags, lcl);
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    if (trimmed.startsWith('- id:')) {
-      if (current?.id) {
-        records.push(normalizeRecord(current));
-      }
-      current = { id: trimmed.replace('- id:', '').trim() };
-      continue;
+    if (!best || (best.reference.score ?? -Infinity) < score) {
+      best = {
+        reference: {
+          id: entry.id,
+          title: entry.title,
+          archetype: entry.archetype,
+          keywords: entry.keywords,
+          manifestPath: entry.manifestPath,
+          annotationPath: entry.annotationPath,
+          previewVideoPath: entry.previewVideoPath,
+          score,
+        },
+        annotation,
+      };
     }
-
-    if (!current) continue;
-    const [rawKey, ...rest] = trimmed.split(':');
-    if (!rawKey || rest.length === 0) continue;
-    const key = rawKey.trim();
-    const value = rest.join(':').trim();
-    (current as Record<string, unknown>)[key] = castScalar(value);
   }
 
-  if (current?.id) {
-    records.push(normalizeRecord(current));
-  }
-
-  return records.length > 0 ? records : DEFAULT_FORMATIONS;
+  return best;
 }
 
-function normalizeRecord(record: Partial<FormationRecord>): FormationRecord {
+function scoreFormation(
+  entry: FormationManifestEntry,
+  annotation: FormationAnnotation | undefined,
+  tags: Set<string>,
+  lcl: LightControlLanguage,
+): number {
+  let score = 0;
+
+  if (entry.archetype === lcl.motion.archetype) score += 4;
+  if (annotation?.preferredFamilies?.includes(lcl.morphology.family)) score += 3;
+
+  for (const keyword of entry.keywords) {
+    if (tags.has(keyword.toLowerCase())) score += 1.5;
+  }
+
+  for (const semanticTag of annotation?.semanticTags ?? []) {
+    if (tags.has(semanticTag.toLowerCase())) score += 1.0;
+  }
+
+  return score;
+}
+
+export function mergeRetrievedFormation(
+  lcl: LightControlLanguage,
+  retrieved: RetrievedFormation | null,
+): LightControlLanguage {
+  if (!retrieved) return lcl;
+
+  const annotation = retrieved.annotation;
   return {
-    id: record.id ?? 'emergence/nebula_birth',
-    archetype: record.archetype ?? 'emergence',
-    phrase: record.phrase ?? 'born from diffuse light',
-    forceBias: Number(record.forceBias ?? 0.9),
-    coherenceStart: Number(record.coherenceStart ?? 0.1),
-    coherenceTarget: Number(record.coherenceTarget ?? 0.82),
-    flowBias: Number(record.flowBias ?? 0.7),
-    noiseBias: Number(record.noiseBias ?? 0.5),
-    rhythm: Number(record.rhythm ?? 0.2),
+    ...lcl,
+    retrieved_formation: retrieved.reference,
+    runtime_bias: {
+      forceBias: annotation?.forceBias ?? 0.8,
+      flowBias: annotation?.flowBias ?? 0.7,
+      noiseBias: annotation?.noiseBias ?? 0.6,
+      coherenceStart: annotation?.coherenceStart ?? 0.12,
+      archetypePhrase: annotation?.notes ?? retrieved.reference.title,
+    },
   };
 }
 
-function castScalar(value: string): string | number {
-  const normalized = value.replace(/^['"]|['"]$/g, '');
-  const asNumber = Number(normalized);
-  return Number.isFinite(asNumber) ? asNumber : normalized;
+async function fetchAndParseJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch content from ${url}: ${res.statusText}`);
+  const text = await res.text();
+  
+  // CRITICAL: This assumes the fetched content is valid JSON.
+  // In production, you would replace this with a robust YAML parser library (e.g., js-yaml)
+  // if the source is guaranteed to be YAML.
+  try {
+    return JSON.parse(text) as T;
+  } catch (e) {
+    throw new Error(`Failed to parse content from ${url} as JSON.`);
+  }
+}
+
+function resolveAssetUrl(baseUrl: string, path: string): string {
+  if (/^https?:\/\//.test(path)) return path;
+  return `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
 }
