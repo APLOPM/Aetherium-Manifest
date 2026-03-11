@@ -3,23 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AETHERIUM Light Control Kernel v4</title>
+  <title>AETHERIUM Light UI</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
 
     :root {
-      --void-bg: #010102;
-      --glass-bg: rgba(10, 10, 12, 0.88);
-      --text: #e5e7eb;
-      --muted: #6b7280;
-      --blue: #00e5ff;
-      --pink: #ff0055;
+      --void-bg: #020204;
+      --panel-bg: rgba(10, 10, 14, 0.78);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --text: #eef2ff;
+      --muted: #8b93a7;
+      --cyan: #00e5ff;
+      --pink: #ff3d81;
       --gold: #ffd166;
-      --green: #4ade80;
-      --crimson: #dc2626;
+      --shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
     }
 
     * { box-sizing: border-box; }
+
     html, body {
       margin: 0;
       width: 100%;
@@ -28,164 +29,619 @@
       background: var(--void-bg);
       color: var(--text);
       font-family: 'JetBrains Mono', monospace;
-      user-select: none;
     }
 
-    canvas#display-layer {
+    body {
+      position: relative;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    #display-layer {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
+      display: block;
       z-index: 1;
+      background: radial-gradient(circle at 50% 42%, rgba(32, 41, 82, 0.18), transparent 40%), #020204;
     }
 
-    #hud {
+    /*
+      memory-layer ยังเก็บไว้เพื่อใช้เป็น canvas ช่วยคอมไพล์ข้อความเป็น field ของอนุภาค
+      แต่จะไม่แสดงผลให้ผู้ใช้เห็นโดยตรง
+    */
+    #memory-layer,
+    #file-input {
+      display: none;
+    }
+
+    .ambient-label {
       position: absolute;
       top: 18px;
-      left: 18px;
-      z-index: 10;
-      width: 390px;
-      background: var(--glass-bg);
-      backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.45);
-    }
-
-    .section-title {
-      font-size: 11px;
-      color: var(--muted);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      padding-bottom: 6px;
-      margin-bottom: 12px;
-    }
-
-    textarea {
-      width: 100%;
-      min-height: 90px;
-      resize: vertical;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.03);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 10px;
-      font: inherit;
-      font-size: 12px;
-      line-height: 1.5;
-      outline: none;
-    }
-
-    .btn-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    button {
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.03);
-      color: #fff;
-      border-radius: 8px;
-      padding: 10px;
-      cursor: pointer;
-      font: inherit;
-      font-size: 11px;
-      transition: 0.2s ease;
-    }
-
-    button:hover {
-      background: rgba(255,255,255,0.08);
-      border-color: rgba(255,255,255,0.25);
-    }
-
-    .full { grid-column: 1 / -1; }
-
-    .schema-box {
-      max-height: 240px;
-      overflow: auto;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
       font-size: 10px;
-      line-height: 1.45;
-      background: rgba(0,0,0,0.2);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 8px;
+      letter-spacing: 0.32em;
+      color: rgba(255,255,255,0.42);
+      text-transform: uppercase;
+      pointer-events: none;
+      text-shadow: 0 0 12px rgba(255,255,255,0.08);
+    }
+
+    .bottom-shell {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 5;
+      padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+      background: linear-gradient(to top, rgba(2,2,4,0.88), rgba(2,2,4,0.22) 60%, transparent);
+      pointer-events: none;
+    }
+
+    .chat-bar {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
       padding: 10px;
-      white-space: pre-wrap;
-      user-select: text;
+      pointer-events: auto;
+    }
+
+    .chat-top {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    .icon-btn,
+    .send-btn {
+      border: 0;
+      outline: none;
+      appearance: none;
+      cursor: pointer;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }
+
+    .icon-btn:hover,
+    .send-btn:hover {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255,255,255,0.14);
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+    }
+
+    .icon-btn svg,
+    .send-btn svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+
+    .composer-wrap {
+      flex: 1 1 auto;
+      min-width: 0;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 18px;
+      padding: 10px 12px;
+    }
+
+    #chat-input {
+      width: 100%;
+      min-height: 24px;
+      max-height: 120px;
+      resize: none;
+      overflow-y: auto;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    #chat-input::placeholder {
+      color: var(--muted);
+    }
+
+    .chat-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+      padding: 0 2px;
+    }
+
+    .status-line {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .send-btn {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(0,229,255,0.22), rgba(255,61,129,0.24));
+      border-color: rgba(255,255,255,0.14);
+      box-shadow: 0 0 22px rgba(0, 229, 255, 0.12);
+    }
+
+    .send-btn:hover {
+      box-shadow: 0 0 28px rgba(255, 61, 129, 0.18);
+    }
+
+    .recording {
+      border-color: rgba(255, 61, 129, 0.48) !important;
+      background: rgba(255, 61, 129, 0.12) !important;
+      box-shadow: 0 0 18px rgba(255, 61, 129, 0.22);
+    }
+
+    .file-chip {
+      display: none;
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+      color: #dbe8ff;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .file-chip.active {
+      display: flex;
+    }
+
+    .file-remove {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    @media (max-width: 640px) {
+      .bottom-shell {
+        padding-inline: 10px;
+      }
+
+      .chat-bar {
+        border-radius: 20px;
+        padding: 8px;
+      }
+
+      .icon-btn,
+      .send-btn {
+        width: 42px;
+        height: 42px;
+      }
+
+      #chat-input {
+        font-size: 13px;
+      }
     }
   </style>
 </head>
 <body>
   <canvas id="display-layer"></canvas>
+  <canvas id="memory-layer"></canvas>
+  <input id="file-input" type="file" />
 
-  <div id="hud">
-    <div class="section-title">Aetherium Light Control Kernel v4</div>
+  <div class="ambient-label">AETHERIUM</div>
 
-    <div class="section-title">User Request</div>
-    <textarea id="txt-request">สร้างรูปทรงเกลียวสีทองอมม่วง ค่อยๆ ลอยขึ้นอย่างสงบ เหมือน AI กำลังคิดอย่างลึกซึ้ง</textarea>
+  <div class="bottom-shell">
+    <div class="chat-bar">
+      <div class="chat-top">
+        <button class="icon-btn" id="attach-btn" title="แนบไฟล์" aria-label="แนบไฟล์">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.48l10.6-10.61a4 4 0 0 1 5.66 5.66L8.7 18.12a2 2 0 1 1-2.83-2.83l9.2-9.19"/>
+          </svg>
+        </button>
 
-    <div class="btn-grid">
-      <button id="btn-run">RUN REQUEST</button>
-      <button id="btn-reset">RESET VOID</button>
-      <button class="full" id="btn-schema">SHOW CURRENT LCL</button>
+        <div class="composer-wrap">
+          <textarea id="chat-input" rows="1" placeholder="ส่งข้อความถึงแสง..."></textarea>
+        </div>
+
+        <button class="icon-btn" id="voice-btn" title="ข้อความเสียง" aria-label="ข้อความเสียง">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 15a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/>
+            <path d="M19 11a7 7 0 0 1-14 0"/>
+            <path d="M12 18v4"/>
+            <path d="M8 22h8"/>
+          </svg>
+        </button>
+
+        <button class="send-btn" id="send-btn" title="ส่ง" aria-label="ส่ง">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 2 11 13"/>
+            <path d="M22 2 15 22l-4-9-9-4 20-7Z"/>
+          </svg>
+        </button>
+
+        <button class="icon-btn" id="settings-btn" title="ตั้งค่า" aria-label="ตั้งค่า">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="file-chip" id="file-chip">
+        <span id="file-name">ไม่มีไฟล์</span>
+        <button class="file-remove" id="file-remove" type="button">ลบ</button>
+      </div>
+
+      <div class="chat-bottom">
+        <div class="status-line" id="status-line">SPHERE STANDBY · แตะหน้าจอเพื่อปลุกแสง</div>
+        <div class="action-row"></div>
+      </div>
     </div>
-
-    <div style="margin-top: 16px" class="section-title">LCL</div>
-    <div class="schema-box" id="schema-view">Press RUN to generate LCL</div>
   </div>
 
-  <script type="module">
-    import { AetheriumKernel } from './kernel.js';
+  <script>
+    // ------------------------------------------------------------
+    // AETHERIUM Light UI
+    // ------------------------------------------------------------
+    // โค้ดนี้ถูกออกแบบให้มีเพียง “ร่างกายของแสง” เต็มจอ และแถบแชทด้านล่าง
+    // โดยไม่มี HUD หรือ panel วิเคราะห์อื่น ๆ
+    //
+    // พฤติกรรมหลักที่เพิ่มเข้ามา:
+    // 1) แสงตั้งต้นเป็นทรงกลมเคลื่อนไหวในโหมด standby
+    // 2) เมื่อไม่มีการใช้งานเกิน 5 วินาที แสงจะค่อย ๆ สลายหายไป
+    // 3) เมื่อแตะหน้าจอ แสงจะกลับมาปรากฏและ “แตกตัว” จากจุดสัมผัส
+    // 4) รองรับการเอียงอุปกรณ์ผ่าน DeviceOrientationEvent
+    //    โดยอนุภาคจะไหลไปตามแรงโน้มเอียงนั้น
+    // ------------------------------------------------------------
 
-    const canvas = document.getElementById('display-layer');
-    const schemaView = document.getElementById('schema-view');
-    const txtRequest = document.getElementById('txt-request');
-    
-    // --- Kernel Initialization ---
-    const kernel = new AetheriumKernel({
-      canvas: canvas,
-      // IMPORTANT: Replace with your actual backend endpoint
-      apiBaseUrl: 'http://localhost:8000', 
-      // IMPORTANT: Replace with the URL serving your formation manifest
-      formationBaseUrl: '.', 
-      evaluatorMode: 'local', // Use local evaluator for now
-    });
-    
-    const resizeObserver = new ResizeObserver(entries => {
-        const { width, height } = entries[0].contentRect;
-        kernel.resize(width, height);
-    });
-    resizeObserver.observe(canvas);
-    kernel.resize(canvas.clientWidth, canvas.clientHeight);
-    
-    kernel.start();
+    const display = document.getElementById('display-layer');
+    const ctx = display.getContext('2d', { alpha: false });
 
-    // --- UI Wiring ---
-    document.getElementById('btn-run').addEventListener('click', async () => {
-      schemaView.textContent = 'Interpreting with LLM...';
-      await kernel.handleUserLightRequest(txtRequest.value);
-      const lcl = kernel.getLCLSchema();
-      schemaView.textContent = lcl ? JSON.stringify(lcl, null, 2) : 'Failed to generate LCL.';
-    });
+    // memory-layer ใช้เป็นพื้นที่วาดข้อความชั่วคราวเพื่อแปลงข้อความเป็น field ของอนุภาค
+    const memCanvas = document.getElementById('memory-layer');
+    const memCtx = memCanvas.getContext('2d', { willReadFrequently: true });
 
-    document.getElementById('btn-reset').addEventListener('click', () => {
-      kernel.resetToVoid();
-      schemaView.textContent = 'Kernel reset. Ready for new request.';
-      txtRequest.value = 'สร้างรูปทรงเกลียวสีทองอมม่วง ค่อยๆ ลอยขึ้นอย่างสงบ เหมือน AI กำlingคิดอย่างลึกซึ้ง';
-    });
-    
-    document.getElementById('btn-schema').addEventListener('click', () => {
-        const lcl = kernel.getLCLSchema();
-        if (lcl) {
-            schemaView.textContent = JSON.stringify(lcl, null, 2);
-        } else {
-            schemaView.textContent = 'No LCL has been generated yet. Run a request first.';
+    // ส่วนควบคุมด้านล่างทั้งหมด
+    const chatInput = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const attachBtn = document.getElementById('attach-btn');
+    const voiceBtn = document.getElementById('voice-btn');
+    const settingsBtn = document.getElementById('settings-btn');
+    const fileInput = document.getElementById('file-input');
+    const fileChip = document.getElementById('file-chip');
+    const fileNameEl = document.getElementById('file-name');
+    const fileRemoveBtn = document.getElementById('file-remove');
+    const statusLine = document.getElementById('status-line');
+
+    // ขนาด viewport และศูนย์กลางฉาก
+    let W = 0;
+    let H = 0;
+    let CX = 0;
+    let CY = 0;
+
+    // time accumulator ใช้ขับ animation แบบต่อเนื่อง
+    let renderTime = 0;
+
+    // การจัดการ input ของผู้ใช้
+    let selectedFile = null;
+    let recording = false;
+
+    // เวลาปฏิสัมพันธ์ล่าสุด ใช้ตัดสินว่า idle เกิน 5 วินาทีหรือยัง
+    let lastInteractionTime = performance.now();
+
+    // สถานะว่าแสงกำลังค่อย ๆ หายไปอยู่หรือไม่
+    let fadingOut = false;
+
+    // ความแรงรวมของการมองเห็นแสงทั้งระบบ (0 = หาย, 1 = เต็ม)
+    let visibilityStrength = 1;
+
+    // ตัวเก็บแรงกระตุ้นจากการแตะหน้าจอ
+    // เมื่อมีการแตะ เราจะใส่ burst ชั่วคราว เพื่อให้แสง “แตกตัว” รอบจุดสัมผัส
+    const touchBursts = [];
+
+    // ตัวเก็บทิศทางเอียงของอุปกรณ์
+    // tiltX = แรงดึงแนวนอน, tiltY = แรงดึงแนวตั้ง
+    const deviceTilt = {
+      x: 0,
+      y: 0,
+      supported: false,
+      permissionRequired: typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function',
+      active: false
+    };
+
+    // จำนวนอนุภาคหลักของฉาก
+    const NUM_PHOTONS = 5200;
+    const photons = [];
+
+    // targetField คือเป้าหมายที่อนุภาคจะถูกดึงดูดเข้าไปหา
+    // หากว่าง ระบบจะกลับไปใช้รูปทรง standby sphere แทน
+    let targetField = [];
+
+    // theme ใช้กำหนด behavior ของสนามแสงในแต่ละสภาวะ
+    let theme = 'idle';
+
+    // แต่ละ theme มีพารามิเตอร์ของแรงดึง สี ความฟุ้ง และ mode การไหลของอนุภาค
+    const THEMES = {
+      idle: {
+        palette: ['#274060', '#3d5a80', '#7cc6fe'],
+        force: 0.015,
+        noise: 0.25,
+        glow: 0.34,
+        trail: 0.12,
+        mode: 'standby'
+      },
+      sent: {
+        palette: ['#00e5ff', '#ff3d81', '#ffd166'],
+        force: 0.04,
+        noise: 0.18,
+        glow: 0.62,
+        trail: 0.22,
+        mode: 'message'
+      },
+      voice: {
+        palette: ['#ff3d81', '#ffd166', '#ffffff'],
+        force: 0.03,
+        noise: 0.22,
+        glow: 0.56,
+        trail: 0.18,
+        mode: 'voice'
+      }
+    };
+
+    // ------------------------------------------------------------
+    // Utility / Layout
+    // ------------------------------------------------------------
+
+    function resize() {
+      // ปรับ canvas ให้ตรงกับ viewport จริงทุกครั้งที่หน้าจอเปลี่ยนขนาด
+      W = display.width = window.innerWidth;
+      H = display.height = window.innerHeight;
+      memCanvas.width = W;
+      memCanvas.height = H;
+      CX = W * 0.5;
+      CY = H * 0.5;
+      console.log('[AETHERIUM][resize]', { width: W, height: H, centerX: CX, centerY: CY });
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function nowMs() {
+      return performance.now();
+    }
+
+    function markInteraction(reasonText) {
+      // ฟังก์ชันนี้ถูกเรียกเมื่อผู้ใช้แตะหน้าจอ พิมพ์ข้อความ กดปุ่ม ฯลฯ
+      // เพื่อรีเซ็ตตัวจับเวลา idle และปลุกแสงกลับมา
+      lastInteractionTime = nowMs();
+      fadingOut = false;
+      visibilityStrength = Math.min(1, visibilityStrength + 0.14);
+      console.log('[AETHERIUM][interaction]', {
+        reason: reasonText || 'no-reason',
+        lastInteractionTime,
+        visibilityStrength,
+        fadingOut
+      });
+      if (reasonText) setStatus(reasonText);
+    }
+
+    function setStatus(text) {
+      statusLine.textContent = text;
+      console.log('[AETHERIUM][status]', text);
+    }
+
+    function setTheme(nextTheme) {
+      theme = nextTheme;
+      console.log('[AETHERIUM][theme]', { theme });
+    }
+
+    function autoResizeTextarea() {
+      chatInput.style.height = '24px';
+      chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+      console.log('[AETHERIUM][textarea-resize]', {
+        valueLength: chatInput.value.length,
+        height: chatInput.style.height
+      });
+    }
+
+    // ------------------------------------------------------------
+    // Color helpers
+    // ------------------------------------------------------------
+
+    function hexToRgb(hex) {
+      const v = hex.replace('#', '');
+      const full = v.length === 3 ? v.split('').map(s => s + s).join('') : v;
+      return [
+        parseInt(full.slice(0, 2), 16),
+        parseInt(full.slice(2, 4), 16),
+        parseInt(full.slice(4, 6), 16)
+      ];
+    }
+
+    function paletteColor(t, palette) {
+      // ไล่สีระหว่างสีติดกันใน palette เพื่อให้แสงดูไม่แข็งเกินไป
+      const a = hexToRgb(palette[Math.floor(t * palette.length) % palette.length]);
+      const b = hexToRgb(palette[(Math.floor(t * palette.length) + 1) % palette.length]);
+      const m = (Math.sin(t * Math.PI * 2) + 1) * 0.5;
+      return [
+        a[0] + (b[0] - a[0]) * m,
+        a[1] + (b[1] - a[1]) * m,
+        a[2] + (b[2] - a[2]) * m
+      ];
+    }
+
+    // ------------------------------------------------------------
+    // Standby sphere field
+    // ------------------------------------------------------------
+
+    function getStandbyTarget(index) {
+      // โหมดตั้งต้นต้องเป็น “ทรงกลมที่มีชีวิต”
+      // เราจึงสร้างทรงกลมแบบมี pulse / breathing และมีการ ripple เบา ๆ ตามเวลา
+      const t = index / NUM_PHOTONS;
+      const angle = t * Math.PI * 2 * 7.0;
+
+      // breathing คือการขยาย-ยุบเล็กน้อยของรัศมีทรงกลมตามเวลา
+      const breathing = 1 + Math.sin(renderTime * 1.25) * 0.08;
+      const radius = Math.min(W, H) * 0.10 * breathing;
+
+      // ใช้พิกัดรูปวงกลมใน 2D แต่บิดด้วย harmonic เล็กน้อยเพื่อไม่ให้แข็งนิ่งเกินไป
+      const radialMod = 1 + Math.sin(angle * 3.0 + renderTime * 0.9) * 0.08;
+      const x = CX + Math.cos(angle) * radius * radialMod;
+      const y = CY + Math.sin(angle) * radius * (0.78 + Math.cos(angle * 2.0 + renderTime * 0.7) * 0.06);
+
+      return {
+        x,
+        y,
+        color: paletteColor(t, THEMES.idle.palette)
+      };
+    }
+
+    function clearTargetField() {
+      // ถ้าไม่มีข้อความหรือ target ภายนอก ให้กลับไปใช้ standby sphere เสมอ
+      targetField = [];
+      setTheme(recording ? 'voice' : 'idle');
+      console.log('[AETHERIUM][target-field-cleared]', { recording, theme, targetCount: targetField.length });
+    }
+
+    // ------------------------------------------------------------
+    // Touch burst system
+    // ------------------------------------------------------------
+
+    function addTouchBurst(x, y) {
+      // touch burst ทำให้เกิดการแตกตัวของอนุภาคจากจุดแตะ
+      // ใช้เป็นทั้ง feedback สัมผัส และใช้ปลุกแสงเมื่ออยู่ในภาวะ fade out
+      touchBursts.push({
+        x,
+        y,
+        bornAt: renderTime,
+        life: 1.2,
+        strength: 1.2
+      });
+
+      // จำกัดจำนวน burst เพื่อไม่ให้ array โตเรื่อย ๆ
+      if (touchBursts.length > 8) {
+        touchBursts.shift();
+      }
+
+      console.log('[AETHERIUM][touch-burst-added]', {
+        x,
+        y,
+        burstCount: touchBursts.length,
+        renderTime
+      });
+    }
+
+    function applyTouchBursts(photon) {
+      // คืนแรงจาก burst แต่ละลูกให้กับอนุภาค
+      // ถ้าอนุภาคอยู่ใกล้จุดสัมผัส จะถูกผลักออกจากจุดนั้น
+      let fx = 0;
+      let fy = 0;
+
+      for (const burst of touchBursts) {
+        const age = renderTime - burst.bornAt;
+        if (age > burst.life) continue;
+
+        const dx = photon.x - burst.x;
+        const dy = photon.y - burst.y;
+        const dist = Math.hypot(dx, dy) || 1;
+
+        // falloff แบบค่อย ๆ ลดตามระยะและอายุของ burst
+        const ageFactor = 1 - age / burst.life;
+        const falloff = Math.max(0, 1 - dist / 180) * ageFactor * burst.strength;
+
+        fx += (dx / dist) * falloff * 1.4;
+        fy += (dy / dist) * falloff * 1.4;
+      }
+
+      return { fx, fy };
+    }
+
+    function pruneTouchBursts() {
+      // ลบ burst ที่หมดอายุแล้วทุกเฟรม
+      const before = touchBursts.length;
+      for (let i = touchBursts.length - 1; i >= 0; i--) {
+        if (renderTime - touchBursts[i].bornAt > touchBursts[i].life) {
+          touchBursts.splice(i, 1);
         }
-    });
+      }
+      if (before !== touchBursts.length) {
+        console.log('[AETHERIUM][touch-burst-pruned]', { before, after: touchBursts.length, renderTime });
+      }
+    }
 
-  </script>
-</body>
-</html>
+    // ------------------------------------------------------------
+    // Device orientation support
+    // ------------------------------------------------------------
+
+    function handleOrientation(event) {
+      // beta = เอียงหน้า/หลัง, gamma = เอียงซ้าย/ขวา
+      // เราแปลงค่าองศาให้อยู่ในช่วงประมาณ -1 ถึง 1 เพื่อใช้เป็นแรงโน้มเอียงในสนามแสง
+      if (typeof event.beta !== 'number' || typeof event.gamma !== 'number') return;
+
+      deviceTilt.supported = true;
+      deviceTilt.active = true;
+
+      // จำกัดช่วงเพื่อไม่ให้แรงเอียงรุนแรงเกินไปบนบางอุปกรณ์
+      const gamma = clamp(event.gamma, -45, 45);
+      const beta = clamp(event.beta, -45, 45);
+
+      deviceTilt.x = gamma / 45;
+      deviceTilt.y = beta / 45;
+
+      console.log('[AETHERIUM][orientation]', {
+        beta: event.beta,
+        gamma: event.gamma,
+        normalizedX: deviceTilt.x,
+        normalizedY: deviceTilt.y
+      });
+    }
+
+    async function enableDeviceOrientationIfNeeded() {
+      // iOS บางเวอร์ชันต้องขอ permission ผ่าน gesture ก่อน
+      if (typeof DeviceOrientationEvent === 'undefined') {
+        console.log('[AETHERIUM][orientation]', 'DeviceOrientationEvent not available');
+        return;
+      }
+
+      try {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const result = await DeviceOrientationEvent.requestPermission();
+          console.log('[AETHERIUM][orientation-permission]', { result });
+          if (result === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation, true);
+        
