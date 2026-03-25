@@ -562,6 +562,26 @@ The runtime governor also includes a `psycho_safety_gate` stage that now tracks 
 
 ---
 
+
+## Tiny Reasoning + Light-Text Prototype
+
+A compact prototype is available at `tools/tiny_reasoning_light_model.py` for teams that want a RAM-bounded reasoning module plus deterministic light-text output.
+
+- Trains from specialized samples (`SpecializedSample`) instead of full-scale LLM pretraining.
+- Uses a compact intent scorer to keep memory footprint small (`ram_budget_mb` hint for deployment planning).
+- Emits `matrix_5x7` light frames with safety profile clamps (`max_fps`, `max_brightness`, `flicker_hz_cap`) to support low-sensory/no-flicker display modes.
+
+Quick smoke run:
+
+```bash
+python - <<'PY2'
+from tools.tiny_reasoning_light_model import bootstrap_demo_model
+m = bootstrap_demo_model()
+print(m.respond("summarize runtime governor pipeline"))
+print(m.render_light_frames("HI")[0])
+PY2
+```
+
 ## Validation & Tests
 
 ```bash
