@@ -1,0 +1,25 @@
+global:
+  environment: dev
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Tags allow coarse-grained enable/disable for dependency groups per environment.
+tags:
+  infra: true
+  messaging: true
+  state-plane: true
+  telemetry: true
+  datastore: true
+
+redis:
+  enabled: true
+
+nats:
+  enabled: true
+
+kafka:
+  enabled: false
+
+clickhouse:
+  enabled: false
