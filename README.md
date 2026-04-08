@@ -794,7 +794,16 @@ Canonical ecosystem repositories (provided by maintainer context):
 3. LOGENESIS-1.5: https://github.com/FGD-ATR-EP/LOGENESIS-1.5
 4. BioVisionVS1.1: https://github.com/FGD-ATR-EP/BioVisionVS1.1
 
-Working agreement for future changes:
-- Treat these repositories as part of the AETHERIUM native ecosystem context.
-- Prefer contract-compatible evolution paths that keep Manifest and AetherBus-Tachyon semantically aligned.
-- Record architecture assumptions in-repo before implementing ABI-impacting changes.
+
+
+## Runtime Pipeline Upgrade (VAD + STT + Intent Mapping, Prototype)
+
+มีการปรับปรุง `index.html` แบบไม่ลบโครงสร้างเดิม เพื่อยกระดับโฟลว์ภายในให้ใกล้กับสถาปัตยกรรมที่เสนอไว้:
+
+- เพิ่มโครงสร้าง **Voice Activity Detection (VAD mock runtime)** ผ่านปุ่ม 🎤 โดยมี start/stop cycle และ callback `onSpeechEnd`.
+- เพิ่มเลเยอร์ **Speech-to-Text (mock Deepgram/Whisper adapter)** ในฟังก์ชัน `transcribeAudio(audioBlob)` เพื่อเตรียมจุดเชื่อมต่อ API จริง.
+- เพิ่มเลเยอร์ **Intent Analysis (LLM-oriented mapping)** ผ่าน `analyzeIntentWithLLM()` + `mapIntentToVisual()` แยกจาก heuristic เดิม เพื่อให้ต่อยอด backend intent engine ได้ง่าย.
+- เพิ่ม **Adaptive Graphics Quality** แบบ runtime (`detectGraphicsTier`, `applyQualityTier`) พร้อมแสดง quality tier / FPS บน HUD.
+- เพิ่ม **Frame Rate Management (Nirodha-friendly)** โดยจำกัดอัตราเรนเดอร์ตาม `targetFps` และลดเฟรมเมื่อ tab ไม่ active.
+
+> หมายเหตุ: เวอร์ชันนี้ยังเป็น prototype แบบ browser-only โดยใช้ mock implementation สำหรับ VAD/STT/LLM adapter เพื่อคงความสามารถรันได้ทันทีโดยไม่ต้องลง dependency เพิ่ม.

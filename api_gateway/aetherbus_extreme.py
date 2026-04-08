@@ -54,15 +54,10 @@ def zero_copy_send(sock: Any, data: bytes | bytearray | memoryview) -> int:
     return total_sent
 
 
-async def zero_copy_send_async(sock: Any, data: bytes | bytearray | memoryview) -> int:
-    mv = memoryview(data)
-    loop = asyncio.get_running_loop()
-    await loop.sock_sendall(sock, mv)
-    return len(mv)
-
-
 def _load_msgspec() -> Any:
-    return importlib.import_module("msgspec")
+    if not hasattr(_load_msgspec, "_module"):
+        _load_msgspec._module = importlib.import_module("msgspec")
+    return _load_msgspec._module
 
 
 def serialize_to_msgpack(data: Any) -> bytes:
@@ -195,7 +190,7 @@ class StateConvergenceProcessor:
     def update_state(self, key: str, value: Any, version: int | None = None) -> bool:
         current_version = self._versions.get(key, -1)
         candidate_version = current_version + 1 if version is None else version
-        if candidate_version < current_version:
+        if candidate_version <= current_version:
             return False
 
         self._state[key] = value
