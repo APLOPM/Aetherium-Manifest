@@ -77,3 +77,26 @@ Compatibility policy:
 - `light_program.renderer_controls` is the canonical compiled renderer block shared with `embodiment_v2`.
 - Legacy consumers reading `visual_parameters` MUST use adapter `tools/contracts/protocol_adapter.py`, which in turn consumes the canonical particle control adapter output.
 - Schema lint enforces `x-field-evolution` metadata + required section presence for every governed contract.
+
+## Scholar Contract V1 (Knowledge Augmentation)
+Canonical contract file: `docs/schemas/scholar_contract_v1.json`
+
+This sub-schema defines the structure for knowledge-heavy outputs from ScholarAgent:
+- `summary` — The human-readable explanation (supports Markdown).
+- `visual_interpretation` — Semantic cue for the renderer (e.g., "ripple pattern").
+- `language` — BCP-47 tag for localization.
+- `cited_sources` — List of URLs for verification.
+- `code_snippet` — Optional technical payload.
+- `tone` — Affects the visual emotional bias (formal, casual, creative).
+
+Reasoning: Ensures that knowledge manifestations are structured, governable, and can be localized or cited properly within the Manifest HUD.
+
+## Export Domain V1
+Canonical contract files:
+- `docs/schemas/export_request_v1.json`
+- `docs/schemas/export_response_v1.json`
+
+Export ABI constraints:
+- Every request MUST include `session_id`, `lineage_id`, and `selected_variation_id` for deterministic replay lineage.
+- `artifact_type` supports: `PNG`, `SVG`, `MP4`, `layer_package`, `manifest_json`, `prompt_lineage_bundle`.
+- Response includes `audit_trail_id`, `replay_key`, and `review_status` so export history can be reviewed in enterprise governance flows.

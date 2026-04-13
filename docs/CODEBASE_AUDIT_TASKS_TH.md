@@ -1,54 +1,69 @@
 # Codebase Audit: ข้อเสนอแผนงานแก้ไข (Thai)
 
-เอกสารนี้สรุปผลการตรวจสอบโค้ดล่าสุด และเสนอ "งานแก้ไข" อย่างละ 1 งานตามหมวดที่ร้องขอ
+อัปเดตการตรวจสอบล่าสุด: 2026-04-13
+
+เอกสารนี้สรุปผลการตรวจสอบโค้ดล่าสุด และเสนอ "งานแก้ไข" จำนวน 4 งานตามหมวดที่ร้องขอ (พิมพ์ผิด, บั๊ก, คอมเมนต์/เอกสารคลาดเคลื่อน, การทดสอบ)
 
 ## 1) งานแก้ไขข้อความพิมพ์ผิด (Typo Fix)
 
 **ปัญหาที่พบ**
-- ใน `api_gateway/README.md` มีประโยคภาษาอังกฤษพิมพ์ตกคำ:
-  - `For an environment that is closer to production, ...`
-- ปรับให้ถ้อยคำสอดคล้องกับสำนวนอังกฤษมาตรฐาน และชี้ตรงกับคำแนะนำการใช้งานสคริปต์
+- ใน `api_gateway/README.md` หัวข้อการรัน Production ใช้คำว่า `Environment Variable` (เอกพจน์)
+- ข้อความบรรทัดเดียวกันอธิบายถึงการตั้งค่า API key หลายตัวแปร จึงควรใช้พหูพจน์เพื่อให้ภาษาตรงความหมาย
 
 **งานที่เสนอ**
-- แก้เป็น:
-  - `For an environment that is closer to production, use the provided shell script.`
-- ตรวจทานทั้งไฟล์ README ภาษาอังกฤษ/ไทยแบบรอบเดียวเพื่อเก็บ typo ใกล้เคียงกัน
+- แก้คำเป็น `Environment Variables` และไล่ตรวจคำศัพท์เทคนิคชุดเดียวกันให้ใช้รูปแบบมาตรฐานเดียวกันทั้งไฟล์
+
+**เกณฑ์ยอมรับ (Acceptance Criteria)**
+- ไม่มีคำ `Environment Variable` เหลือในบริบทที่กล่าวถึงหลายตัวแปร
+- README ใช้ถ้อยคำสอดคล้องกันทั้งเอกสาร
 
 ---
 
 ## 2) งานแก้ไขบั๊ก (Bug Fix)
 
 **ปัญหาที่พบ**
-- Runtime ใน `api_gateway/main.py` อ่าน Google key จาก `GEMINI_API_KEY`
-- แต่สคริปต์รัน `api_gateway/start_cognitive_api.sh` ตรวจ `GOOGLE_API_KEY`
-- ผลคือสคริปต์อาจผ่านเงื่อนไขได้ แต่ API เรียกใช้งานจริงล้มเหลวด้วย error `GEMINI_API_KEY is not set`
+- ฟังก์ชัน `_ensure_api_key` ใน `api_gateway/main.py` ตรวจ `X-API-Key` เทียบค่า expected เฉพาะกรณีที่มีการตั้ง `AETHERIUM_API_KEY`
+- หาก deploy โดยไม่ได้ตั้ง `AETHERIUM_API_KEY` จะเกิดพฤติกรรม fail-open โดยคำขอที่ส่ง key ใดก็ผ่านขั้นตอน compare ได้
 
 **งานที่เสนอ**
-- ทำให้ชื่อ env สอดคล้องกันทั้งระบบ โดยเลือกใช้ `GEMINI_API_KEY` เป็นค่าหลัก
-- เพิ่ม fallback ชั่วคราว (`GOOGLE_API_KEY` -> `GEMINI_API_KEY`) พร้อมข้อความ deprecation
+- เปลี่ยนเป็น fail-closed:
+  1. ถ้าไม่มี `AETHERIUM_API_KEY` ให้ตอบ `500` พร้อมข้อความ misconfiguration ที่ชัดเจน
+  2. เพิ่ม startup guard เพื่อ log/raise เมื่อ secret สำคัญยังไม่ถูกตั้งใน environment production
+
+**เกณฑ์ยอมรับ (Acceptance Criteria)**
+- เมื่อไม่ตั้ง `AETHERIUM_API_KEY` endpoint ที่ป้องกันต้องไม่ยอมรับคำขอ
+- มี log ข้อผิดพลาดด้าน configuration ชัดเจนตั้งแต่ startup
 
 ---
 
-## 3) งานแก้ไขคอมเมนต์/ความคลาดเคลื่อนของเอกสาร (Comment/Docs Discrepancy)
+## 3) งานแก้ไขคอมเมนต์/ความคลาดเคลื่อนเอกสาร (Comment/Docs Discrepancy)
 
 **ปัญหาที่พบ**
-- ใน `api_gateway/test_api.py` มีคอมเมนต์ว่า TestClient ตั้ง header ให้ websocket ไม่ได้:
-  - `TestClient doesn't directly support setting headers for websockets.`
-- แต่ FastAPI/Starlette `websocket_connect` รองรับการส่ง header ได้ และเทสต์ `test_websocket_stream_with_header_key` ถูกปล่อยเป็น `pass`
+- `api_gateway/README.md` ระบุ `WS /ws/cognitive-stream`
+- แต่ใน `api_gateway/main.py` ไม่มี websocket route ดังกล่าว
 
 **งานที่เสนอ**
-- อัปเดตคอมเมนต์ให้ตรงพฤติกรรม framework ปัจจุบัน
-- แทนที่ `pass` ด้วยเทสต์จริงที่ส่ง `X-API-Key` ผ่าน header และ assert ว่า websocket รับข้อความได้
+- ทำ source of truth ให้สอดคล้องกันโดยเลือกหนึ่งแนวทาง:
+  - เพิ่ม route `/ws/cognitive-stream` ให้ใช้งานได้จริงในโค้ด, หรือ
+  - ปรับ README ให้ย้าย endpoint นี้ไปส่วน roadmap/experimental พร้อมระบุว่า route ปัจจุบันที่รองรับจริงคืออะไร
+
+**เกณฑ์ยอมรับ (Acceptance Criteria)**
+- endpoint ที่ระบุใน README ตรงกับ route ที่เปิดใช้งานจริง 100%
+- reviewer อ่าน README แล้วสามารถเรียก endpoint ได้จริงตามเอกสาร
 
 ---
 
 ## 4) งานปรับปรุงการทดสอบ (Test Improvement)
 
 **ปัญหาที่พบ**
-- ปัจจุบันมีเทสต์กรณี unsupported model (`unknown-model`) แต่ยังไม่มีเทสต์กรณี provider ถูกต้องแต่ key ขาด
-- เส้นทางนี้สำคัญเพราะผูกกับ config production โดยตรง
+- `api_gateway/test_api.py` ยังไม่มี regression test ที่ lock พฤติกรรมกรณี `AETHERIUM_API_KEY` ไม่ถูกตั้ง
+- ยังไม่มีเคสที่ยืนยันว่า key ไม่ตรงต้องได้ `403` เมื่อเปิดใช้งาน auth
 
 **งานที่เสนอ**
-- เพิ่มเทสต์สำหรับ `POST /api/v1/cognitive/generate` เมื่อใช้โมเดล Google (`gemini-pro`) แล้วไม่มี `GEMINI_API_KEY`
-- Assert สถานะ `500` และข้อความ `GEMINI_API_KEY is not set`
-- เสริมอีกเคสหนึ่งสำหรับ OpenAI ที่ไม่มี `OPENAI_API_KEY` เพื่อให้ครอบคลุมทั้งสอง provider หลัก
+- เพิ่ม auth regression tests สำหรับ endpoint ที่ป้องกัน (เช่น `/api/v1/cognitive/validate`) อย่างน้อย 2 เคส:
+  1. ไม่ตั้ง `AETHERIUM_API_KEY` แล้วระบบต้อง fail-closed
+  2. ตั้ง `AETHERIUM_API_KEY` แต่ส่ง `X-API-Key` ไม่ตรง ต้องได้ `403`
+
+**เกณฑ์ยอมรับ (Acceptance Criteria)**
+- ชุดทดสอบใหม่ล้มเหลวทันทีหากเกิดพฤติกรรม fail-open
+- ครอบคลุมทั้ง misconfiguration และ invalid credential
