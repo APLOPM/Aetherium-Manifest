@@ -230,8 +230,8 @@ r: Optional[redis.Redis] = None
 nc: Optional[nats.NATS] = None
 NONCE_CACHE: Dict[str, bool] = {}
 RUNTIME_GOVERNOR = RuntimeGovernor()
-EXPORT_AUDIT_TRAIL: List[Dict[str, Any]] = []
-TELEMETRY_TS_DB: list[dict[str, Any]] = []
+EXPORT_AUDIT_TRAIL: deque[Dict[str, Any]] = deque(maxlen=1000)
+TELEMETRY_TS_DB: deque[dict[str, Any]] = deque(maxlen=10000)
 SEV1_INCIDENT_PACKAGES: list[str] = [
     name for name, package in INCIDENT_REPLAY_PACKAGES.items() if package.get("severity") == "sev1"
 ]
