@@ -64,7 +64,7 @@ export function createLanguageLayer(settings) {
     const charDetection = detectFromCharacters(inputText);
     const localDetection = optionalLocalDetector(inputText, settings.useLocalDetector, settings.localModelProfile);
 
-    let resolvedLanguage = browserLanguage;
+    let resolvedLanguage = state.sessionLanguageMemory || browserLanguage;
 
     if (charDetection.confidence >= 0.58 && charDetection.language !== 'unknown') {
       resolvedLanguage = charDetection.language;
@@ -72,10 +72,6 @@ export function createLanguageLayer(settings) {
 
     if (localDetection.confidence >= charDetection.confidence && localDetection.language !== 'unknown') {
       resolvedLanguage = localDetection.language;
-    }
-
-    if (!inputText?.trim()) {
-      resolvedLanguage = state.sessionLanguageMemory || browserLanguage;
     }
 
     state.sessionLanguageMemory = resolvedLanguage;
