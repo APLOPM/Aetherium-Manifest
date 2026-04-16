@@ -41,7 +41,7 @@ function optionalLocalDetector(text, enabled, profile) {
     return { language: 'th', confidence: 0.84 };
   }
 
-  if (/(hello|hi|hey|thanks|thank you|please|what|how|why|where|can you)/.test(normalized)) {
+  if (/\b(hello|hi|hey|thanks|thank you|please|what|how|why|where|can you)\b/.test(normalized)) {
     return { language: 'en', confidence: 0.84 };
   }
 
