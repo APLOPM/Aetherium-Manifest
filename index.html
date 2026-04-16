@@ -1,309 +1,803 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aetherium Manifest | Light-Native Runtime Surface</title>
-    <link rel="manifest" href="/app.webmanifest">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Noto+Sans+Thai:wght@300;400;700&display=swap');
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="manifest" href="app.webmanifest" />
+  <title>Aetherium Genesis Manifest</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Sarabun:wght@300;500&display=swap');
 
-        :root { color-scheme: dark; }
-        * { box-sizing: border-box; }
+    :root {
+      --bg: #050505;
+      --panel: rgba(12, 12, 14, 0.72);
+      --line: rgba(255, 255, 255, 0.16);
+      --white: #ffffff;
+      --sleep: #00008b;
+      --aether: #00ffff;
+      --reasoning: #800080;
+      --load: #ffd700;
+      --critical: #dc143c;
+      --decay: #a52a2a;
+    }
 
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #030305;
-            color: #e0e0ff;
-            font-family: 'Noto Sans Thai', 'JetBrains Mono', monospace;
-            user-select: none;
-        }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at top, #111 0%, var(--bg) 42%);
+      color: #e8e8e8;
+      font-family: 'JetBrains Mono', 'Sarabun', monospace;
+    }
 
-        #canvas-container {
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-        }
+    #nervous-system {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      display: block;
+    }
 
-        .glass-panel {
-            background: rgba(12, 14, 24, 0.35);
-            backdrop-filter: blur(11px);
-            -webkit-backdrop-filter: blur(11px);
-            border: 1px solid rgba(130, 160, 255, 0.14);
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
-        }
+    .hud {
+      position: fixed;
+      z-index: 10;
+      backdrop-filter: blur(12px);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 18px 34px rgba(0,0,0,.45);
+    }
 
-        #landing-layer {
-            position: fixed;
-            inset: 0;
-            z-index: 15;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1.25rem;
-            opacity: 1;
-            pointer-events: auto;
-            transition: opacity 280ms ease;
-        }
+    #status {
+      top: 66px;
+      right: 18px;
+      width: 340px;
+      padding: 14px;
+    }
 
-        body[data-ui-mode="studio"] #landing-layer {
-            opacity: 0;
-            pointer-events: none;
-        }
+    .row {
+      margin-bottom: 12px;
+    }
 
-        .status-dot {
-            width: 0.55rem;
-            height: 0.55rem;
-            border-radius: 999px;
-            display: inline-block;
-            margin-right: 0.45rem;
-            box-shadow: 0 0 10px rgba(130, 190, 255, 0.65);
-        }
+    .row-head {
+      font-size: 11px;
+      display: flex;
+      justify-content: space-between;
+      color: #aaa;
+      margin-bottom: 4px;
+      letter-spacing: .5px;
+    }
 
-        .status-dot.ok { background: #34d399; }
-        .status-dot.warn { background: #facc15; }
-        .status-dot.err { background: #f87171; }
+    .bar-track {
+      height: 4px;
+      background: rgba(255,255,255,.08);
+      border-radius: 999px;
+      overflow: hidden;
+    }
 
-        #studio-layer {
-            position: fixed;
-            top: 0;
-            right: 0;
-            height: 100vh;
-            width: min(94vw, 52rem);
-            z-index: 30;
-            transform: translateX(102%);
-            transition: transform 320ms ease;
-            pointer-events: none;
-        }
+    .bar {
+      height: 100%;
+      width: 0;
+      background: var(--aether);
+      box-shadow: 0 0 12px currentColor;
+      transition: width .32s ease, background-color .45s ease;
+    }
 
-        body[data-ui-mode="studio"] #studio-layer {
-            transform: translateX(0);
-            pointer-events: auto;
-        }
+    #settings-toggle {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 40;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(8, 8, 10, 0.88);
+      color: #fff;
+      cursor: pointer;
+      font-size: 18px;
+      box-shadow: 0 12px 20px rgba(0,0,0,.38);
+    }
 
-        #studio-backdrop {
-            position: fixed;
-            inset: 0;
-            z-index: 25;
-            background: rgba(0, 0, 0, 0.35);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 220ms ease;
-        }
+    #chat-toggle {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 14px;
+      z-index: 35;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(8, 8, 10, 0.82);
+      color: #fff;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+    }
 
-        body[data-ui-mode="studio"] #studio-backdrop {
-            opacity: 1;
-            pointer-events: auto;
-        }
+    #settings-panel {
+      position: fixed;
+      left: 68px;
+      bottom: 16px;
+      z-index: 42;
+      width: min(320px, calc(100vw - 24px));
+      padding: 12px;
+      display: none;
+      font-size: 12px;
+    }
 
-        .lineage-node { transition: all 0.25s ease; }
-        .lineage-node:hover { transform: translateY(-1px); box-shadow: 0 0 18px rgba(130, 190, 255, 0.45); }
+    body.ui-open #settings-panel {
+      display: block;
+    }
 
-        .state-chip.active {
-            color: #e5edff;
-            border-color: rgba(130, 190, 255, 0.55);
-            background: rgba(130, 190, 255, 0.16);
-            text-shadow: 0 0 10px rgba(130, 190, 255, 0.7);
-        }
+    .settings-title {
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
 
-        #manifestation-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 4;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 700ms ease;
-            background: radial-gradient(circle at center, rgba(130,190,255,0.28), rgba(0,0,0,0) 48%);
-        }
+    .window {
+      resize: both;
+      overflow: auto;
+      min-width: 260px;
+      min-height: 120px;
+      max-width: min(92vw, 920px);
+      max-height: 88vh;
+    }
 
-        #branch-panel { transition: opacity 500ms ease; }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: -6px -6px 8px;
+      padding: 6px 6px 8px;
+      border-bottom: 1px dashed rgba(255,255,255,.18);
+      cursor: grab;
+      user-select: none;
+    }
 
-        .branch-btn {
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255,255,255,0.02));
-            transition: all .25s ease;
-        }
+    .panel-header:active {
+      cursor: grabbing;
+    }
 
-        .branch-btn:hover {
-            border-color: rgba(123, 188, 255, 0.58);
-            transform: scale(1.04);
-            box-shadow: 0 0 22px rgba(123, 188, 255, 0.22);
-        }
+    .panel-title {
+      font-size: 11px;
+      letter-spacing: .4px;
+      color: #c7e9ff;
+    }
 
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 rgba(96,165,250,0.1); }
-            50% { box-shadow: 0 0 14px rgba(96,165,250,0.45); }
-            100% { box-shadow: 0 0 0 rgba(96,165,250,0.1); }
-        }
+    .panel-close {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.3);
+      background: rgba(255,255,255,.06);
+      color: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+    }
 
-        .listening-mode { animation: pulse 1.8s infinite; }
-        .voice-active { color: #fda4af !important; text-shadow: 0 0 12px rgba(251,113,133,0.8); }
+    .setting-tabs {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 6px;
+    }
 
-        .quick-chip.active { border-color: rgba(130, 190, 255, 0.7); background: rgba(130, 190, 255, 0.2); color: #eff6ff; }
+    .tab-btn {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.06);
+      color: #fff;
+      padding: 6px;
+      cursor: pointer;
+      font-size: 10px;
+    }
 
-        button:focus-visible,
-        input:focus-visible {
-            outline: 2px solid rgba(147, 197, 253, 0.9);
-            outline-offset: 2px;
-            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25);
-        }
+    .tab-btn.active { border-color: rgba(0,255,255,.8); color: #b8ffff; }
 
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 2px; }
+    .settings-tab { display: none; margin-top: 8px; }
+    .settings-tab.active { display: block; }
 
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
-                scroll-behavior: auto !important;
-            }
+    #external-url {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,.2);
+      background: rgba(255,255,255,.06);
+      color: #fff;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 12px;
+      margin: 6px 0;
+    }
 
-            .listening-mode { animation: none !important; }
-        }
-    </style>
+
+    .setting-group { margin-top: 10px; }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      gap: 8px;
+    }
+
+    .seg {
+      display: inline-flex;
+      gap: 6px;
+    }
+
+    .seg button {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.08);
+      color: #fff;
+      border-radius: 8px;
+      font-size: 11px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+
+    .seg button.active {
+      border-color: rgba(0,255,255,.65);
+      color: #d0ffff;
+    }
+
+    #log {
+      right: 18px;
+      top: 284px;
+      width: 380px;
+      max-height: 46vh;
+      padding: 14px;
+      overflow: auto;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    #log pre {
+      margin: 0;
+      white-space: pre-wrap;
+      color: #c5f7ff;
+    }
+
+    #conversation {
+      right: 18px;
+      top: calc(284px + 46vh + 12px);
+      width: 380px;
+      max-height: 34vh;
+      padding: 12px;
+      overflow: auto;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .bubble {
+      margin: 0 0 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.05);
+    }
+
+    .bubble.user { border-color: rgba(0,255,255,.45); color: #d7ffff; }
+    .bubble.system { border-color: rgba(255,215,0,.35); color: #fff7cf; }
+
+    #sources {
+      margin-top: 8px;
+      color: #9fd4ff;
+      font-size: 11px;
+    }
+
+    #composer {
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      width: min(840px, calc(100vw - 36px));
+      padding: 10px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #compat {
+      right: 18px;
+      bottom: 18px;
+      width: 340px;
+      padding: 10px 12px;
+      font-size: 11px;
+    }
+
+    #compat-frame {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.2);
+      background: rgba(0,0,0,.25);
+      min-height: 90px;
+      object-fit: cover;
+    }
+
+    .compat-note {
+      color: #b7d7ff;
+      line-height: 1.4;
+    }
+
+
+
+    #blueprint {
+      left: 18px;
+      top: 16px;
+      width: min(460px, calc(100vw - 36px));
+      padding: 12px;
+      font-size: 11px;
+      line-height: 1.45;
+      max-height: 42vh;
+      overflow: auto;
+    }
+
+    .lock-badge {
+      display: inline-block;
+      margin-left: 8px;
+      border: 1px solid rgba(0,255,255,.55);
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: #c7ffff;
+      font-size: 10px;
+    }
+
+    .blueprint-meta {
+      margin-top: 8px;
+      color: #b8daff;
+      font-size: 10px;
+    }
+
+    .blueprint-list {
+      margin: 8px 0 0;
+      padding-left: 16px;
+      color: #dce9ff;
+    }
+
+    #composer {
+      transition: transform .28s ease, opacity .28s ease;
+    }
+
+    body:not(.chat-open) #composer {
+      transform: translate(-50%, 120%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #intent-input {
+      width: 100%;
+      border: 0;
+      outline: none;
+      color: white;
+      font-size: 15px;
+      padding: 10px 12px;
+      border-radius: 9px;
+      background: rgba(255,255,255,.07);
+      font-family: 'Sarabun', sans-serif;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.07);
+      color: white;
+      border-radius: 9px;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: transform .16s ease, box-shadow .2s ease, background-color .2s ease;
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid rgba(0,255,255,.8);
+      outline-offset: 2px;
+    }
+
+    .btn.touch-pulse {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 8px rgba(0,255,255,.12);
+    }
+
+    #voice-btn {
+      min-width: 44px;
+      position: relative;
+    }
+
+    #voice-btn.voice-active {
+      background: rgba(0,255,255,.2);
+      border-color: rgba(0,255,255,.7);
+      color: #b8ffff;
+      box-shadow: 0 0 18px rgba(0,255,255,.35);
+      animation: micPulse 1.2s infinite;
+    }
+
+    #voice-btn.voice-blocked {
+      background: rgba(220,20,60,.2);
+      border-color: rgba(220,20,60,.7);
+      color: #ffd0d9;
+    }
+
+    #voice-status {
+      font-size: 11px;
+      color: #9fd4ff;
+      min-width: 104px;
+      text-align: center;
+    }
+
+    .control-strip {
+      display: inline-flex;
+      gap: 6px;
+    }
+
+    @keyframes micPulse {
+      0% { box-shadow: 0 0 0 0 rgba(0,255,255,.36); }
+      70% { box-shadow: 0 0 0 12px rgba(0,255,255,0); }
+      100% { box-shadow: 0 0 0 0 rgba(0,255,255,0); }
+    }
+
+    .chip {
+      display: inline-block;
+      margin-right: 6px;
+      margin-top: 6px;
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: #ddd;
+    }
+
+    #display-page-2 {
+      position: fixed;
+      inset: 0;
+      z-index: 9;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 20% 20%, rgba(0,255,255,.08), transparent 38%),
+                  radial-gradient(circle at 80% 80%, rgba(128,0,128,.12), transparent 42%),
+                  rgba(5,5,5,.72);
+      pointer-events: none;
+    }
+
+    body.display-page-2 #display-page-2 {
+      display: flex;
+    }
+
+    .display2-card {
+      width: min(760px, calc(100vw - 36px));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(10,10,14,.76);
+      backdrop-filter: blur(12px);
+      padding: 16px;
+    }
+
+    .display2-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .display2-cell {
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(255,255,255,.04);
+    }
+
+    .mini-boxes {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 11;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .mini-box {
+      min-width: 130px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.2);
+      background: rgba(8,8,10,.76);
+      font-size: 11px;
+      display: none;
+    }
+
+    body.show-box-1 #mini-box-1,
+    body.show-box-2 #mini-box-2,
+    body.show-box-3 #mini-box-3 {
+      display: block;
+    }
+
+    .critical {
+      border-color: var(--critical) !important;
+      animation: flicker .14s infinite alternate;
+    }
+
+    @keyframes flicker {
+      from { opacity: 1; box-shadow: 0 0 8px rgba(220,20,60,.6); }
+      to { opacity: .75; box-shadow: 0 0 18px rgba(220,20,60,.9); }
+    }
+  </style>
 </head>
-<body class="text-sm" data-ui-mode="landing">
-    <div id="canvas-container"></div>
-    <div id="manifestation-overlay"></div>
+<body>
+  <canvas id="nervous-system"></canvas>
+  <button id="settings-toggle" aria-label="toggle settings">⚙</button>
+  <button id="chat-toggle" aria-label="toggle chat">Chat</button>
 
-    <section id="landing-layer" aria-label="Landing mode">
-        <div class="glass-panel rounded-3xl p-6 md:p-8 w-[min(95vw,58rem)]">
-            <div class="flex items-center justify-between mb-5">
-                <span class="text-[11px] tracking-[0.18em] text-blue-100/80">AETHERIUM MANIFEST</span>
-                <button class="text-xs px-3 py-1.5 rounded-full border border-blue-300/40 text-blue-100 hover:bg-blue-400/15" onclick="openStudio(true)">Advanced Studio</button>
-            </div>
-            <h1 class="text-2xl md:text-4xl font-bold mb-2">Light-native runtime for real user intent.</h1>
-            <p class="text-white/70 max-w-2xl">พิมพ์สิ่งที่ต้องการ แล้วให้แสงจัดรูปแบบ intent เป็นภาพ, UI concept, คำตอบค้นหา, หรือ lighting behavior — โดยไม่ต้องเปิด debug panel ก่อนเริ่ม.</p>
+  <aside class="hud window" id="settings-panel" data-window-key="settings">
+    <div class="settings-title">SETTINGS</div>
+    <div class="setting-tabs" id="settings-tabs">
+      <button class="tab-btn active" data-tab="system" id="system-tab-btn" type="button">System</button>
+      <button class="tab-btn" data-tab="display" type="button">Display</button>
+      <button class="tab-btn" data-tab="panels" type="button">Panels</button>
+      <button class="tab-btn" data-tab="links" type="button">Links</button>
+      <button class="tab-btn" data-tab="language" type="button">Language</button>
+      <button class="tab-btn" data-tab="voice" type="button">Voice</button>
+    </div>
 
-            <div class="grid md:grid-cols-2 gap-2 mt-5" id="starter-prompts"></div>
+    <div class="settings-tab active" data-tab-content="system">
+          <div class="row"><strong>AETHERBUS / GUNUI STATUS</strong></div>
+    <div class="row">
+      <div class="row-head"><span>FSM STATE</span><span id="state-text">IDLE</span></div>
+      <span class="chip" id="shape-chip">shape: cloud</span>
+      <span class="chip" id="intent-chip">intent: chat</span>
+      <span class="chip" id="quality-chip">quality: auto</span>
+      <span class="chip" id="gate-chip">gate: accept</span>
+    </div>
+    <div class="row">
+      <div class="row-head"><span>ENERGY</span><span id="energy-text">100%</span></div>
+      <div class="bar-track"><div class="bar" id="energy-bar"></div></div>
+    </div>
+    <div class="row">
+      <div class="row-head"><span>ENTROPY</span><span id="entropy-text">0%</span></div>
+      <div class="bar-track"><div class="bar" id="entropy-bar"></div></div>
+    </div>
+    <div class="row">
+      <div class="row-head"><span>LOAD (CPU HEAT)</span><span id="load-text">0%</span></div>
+      <div class="bar-track"><div class="bar" id="load-bar"></div></div>
+    </div>
+    </div>
 
-            <div id="landing-status" class="mt-5 text-xs text-white/75 flex flex-wrap gap-4"></div>
+    <div class="settings-tab" data-tab-content="display">
+      <div class="setting-row">
+        <span>Display Page</span>
+        <div class="seg" id="display-selector">
+          <button type="button" data-page="1" class="active">Page 1</button>
+          <button type="button" data-page="2">Page 2</button>
         </div>
-    </section>
+      </div>
+      <div class="setting-row"><span>Mini Box #1</span><button class="btn" id="toggle-box-1" type="button">Toggle</button></div>
+      <div class="setting-row"><span>Mini Box #2</span><button class="btn" id="toggle-box-2" type="button">Toggle</button></div>
+      <div class="setting-row"><span>Mini Box #3</span><button class="btn" id="toggle-box-3" type="button">Toggle</button></div>
+    </div>
 
-    <div id="studio-backdrop" onclick="setUiMode('landing')"></div>
+    <div class="settings-tab" data-tab-content="panels">
+      
+      <div class="setting-row"><label><input type="checkbox" class="panel-toggle" data-target="log" checked /> Intent Log</label></div>
+      <div class="setting-row"><label><input type="checkbox" class="panel-toggle" data-target="conversation" checked /> Conversation</label></div>
+      <div class="setting-row"><label><input type="checkbox" class="panel-toggle" data-target="composer" checked /> Composer</label></div>
+      <div class="setting-row"><label><input type="checkbox" class="panel-toggle" data-target="blueprint" checked /> Blueprint</label></div>
+      <div class="setting-row"><label><input type="checkbox" class="panel-toggle" data-target="compat" checked /> Compatibility</label></div>
+    </div>
 
-    <section id="studio-layer" class="p-4" aria-label="Studio mode">
-        <aside class="glass-panel rounded-2xl p-4 h-full overflow-y-auto flex flex-col gap-3">
-            <div class="flex items-center justify-between">
-                <div class="font-mono text-xs text-white/70 tracking-[0.18em]">SETTINGS / STUDIO</div>
-                <button aria-label="Close studio panel" class="w-8 h-8 rounded-full hover:bg-white/10 text-white/60" onclick="setUiMode('landing')" title="Close settings">
-                    <i class="fas fa-xmark"></i>
-                </button>
-            </div>
+    <div class="settings-tab" data-tab-content="links">
+      <label for="external-url">External URL</label>
+      <input id="external-url" type="url" placeholder="https://example.com/article" />
+      <button class="btn" id="analyze-url-btn" type="button">Analyze URL</button>
+      <div id="url-status" style="margin-top:6px;font-size:11px;color:#9fd4ff;">status: idle</div>
+    </div>
 
-            <div id="connection-banner" class="rounded-lg border border-white/15 px-2.5 py-2 text-xs text-white/70">Checking API / WS connection...</div>
+    <div class="settings-tab" data-tab-content="language">
+      <div class="setting-row">
+        <label for="display-language">Display Language</label>
+        <select id="display-language" class="btn">
+          <option value="th">Thai</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="es">Español</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label for="understanding-language">AI Understanding</label>
+        <select id="understanding-language" class="btn">
+          <option value="auto">Auto detect</option>
+          <option value="th-TH">Thai</option>
+          <option value="en-US">English</option>
+          <option value="ja-JP">Japanese</option>
+          <option value="es-ES">Spanish</option>
+        </select>
+      </div>
+    </div>
 
-            <div class="grid grid-cols-2 text-xs gap-y-1">
-                <span class="text-gray-400">RUNTIME STATE</span>
-                <span id="sys-state" class="text-right text-emerald-300">IDLE</span>
-                <span class="text-gray-400">INTENT ROUTE</span>
-                <span id="sys-route" class="text-right text-blue-300">pure_light</span>
-                <span class="text-gray-400">GOVERNOR</span>
-                <span id="sys-gov" class="text-right text-yellow-300">awaiting</span>
-            </div>
+    <div class="settings-tab" data-tab-content="voice">
+      <div class="setting-row">
+        <label for="voice-mode">Voice Mode</label>
+        <select id="voice-mode" class="btn">
+          <option value="standard">Standard</option>
+          <option value="enhanced">Enhanced</option>
+          <option value="thai-fallback">Thai fallback</option>
+          <option value="regional">Regional</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label for="voice-region">Voice Region</label>
+        <select id="voice-region" class="btn">
+          <option value="us">US</option>
+          <option value="eu">EU</option>
+          <option value="apac">APAC</option>
+          <option value="latam">LATAM</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label><input type="checkbox" id="voice-telemetry" checked /> Enable telemetry</label>
+      </div>
+    </div>
+  </aside>
 
-            <div class="flex flex-wrap gap-1.5 font-mono text-[10px]">
-                <span class="state-chip rounded-full border border-white/15 px-2 py-1" data-state="LISTENING">LISTENING</span>
-                <span class="state-chip rounded-full border border-white/15 px-2 py-1" data-state="INTERPRETING">INTERPRETING</span>
-                <span class="state-chip rounded-full border border-white/15 px-2 py-1" data-state="CONVERGING">CONVERGING</span>
-                <span class="state-chip rounded-full border border-white/15 px-2 py-1" data-state="PROPOSING">PROPOSING</span>
-                <span class="state-chip rounded-full border border-white/15 px-2 py-1" data-state="MANIFESTING">MANIFESTING</span>
-                <span class="state-chip rounded-full border border-white/15 px-2 py-1" data-state="REFINING">REFINING</span>
-                <span class="state-chip rounded-full border border-white/15 px-2 py-1" data-state="EXPORTING">EXPORTING</span>
-                <span class="state-chip rounded-full border border-white/15 px-2 py-1" data-state="NIRODHA">NIRODHA</span>
-            </div>
+  
 
-            <section id="branch-panel" class="opacity-0 pointer-events-none">
-                <div id="branch-buttons" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
-            </section>
+  <aside class="hud window" id="log" data-window-key="log"><pre id="intent-json">Intent vector will appear here...</pre></aside>
 
-            <section id="terminal-logs" class="glass-panel rounded-xl p-3 h-44 overflow-y-auto font-mono text-[10px] text-blue-100"></section>
+  <aside class="hud window" id="conversation" data-window-key="conversation">
+    <div><strong>CONVERSATION CONTEXT</strong></div>
+    <div id="chat-stream"></div>
+    <div id="sources">sources: none</div>
+  </aside>
 
-            <section class="glass-panel rounded-xl p-4 min-h-[16rem] overflow-y-auto">
-                <div class="font-mono text-xs text-cyan-200 mb-3 border-b border-white/10 pb-2 flex justify-between items-center">
-                    <span><i class="fas fa-code-branch mr-2"></i>DESIGN LINEAGE</span>
-                    <div class="flex items-center gap-2">
-                        <span id="lineage-count" class="text-white/45">1 node</span>
-                        <button class="text-[10px] px-2 py-1 rounded border border-cyan-300/40 hover:bg-cyan-400/10" onclick="exportManifest()">EXPORT</button>
-                    </div>
-                </div>
-                <div id="lineage-container" class="space-y-2"></div>
-            </section>
+  <section class="hud window" id="composer" data-window-key="composer">
+    <input id="intent-input" placeholder="Type an intent, e.g. urgent summary request or I feel confused and tired" />
+    <button class="btn" id="voice-btn" type="button" title="Voice chat" aria-label="voice chat" aria-pressed="false">🎤</button>
+    <span id="voice-status" aria-live="polite">voice: idle</span>
+    <button class="btn" id="send-btn" type="button">Emit Intent</button>
+    <button class="btn" id="nirodha-btn" type="button">Nirodha</button>
+    <div class="control-strip" role="group" aria-label="freeze and export controls">
+      <button class="btn" id="freeze-btn" type="button" aria-label="Freeze screen">Freeze</button>
+      <button class="btn" id="draw-btn" type="button" aria-label="Draw mode">Draw</button>
+      <button class="btn" id="save-btn" type="button" aria-label="Save snapshot PDF">Save</button>
+      <button class="btn" id="erase-btn" type="button" aria-label="Erase all traces">Erase</button>
+    </div>
+  </section>
 
-            <section id="scholar-panel" class="glass-panel rounded-xl p-4 hidden min-h-[12rem]">
-                <div class="font-mono text-xs text-fuchsia-200 mb-2 border-b border-fuchsia-300/20 pb-2 flex justify-between">
-                    <span><i class="fas fa-book-open mr-2"></i>SCHOLAR AGENT</span>
-                    <span class="text-fuchsia-100/60">Search Layer</span>
-                </div>
-                <div id="scholar-content" class="text-xs leading-relaxed text-gray-200 space-y-2"></div>
-            </section>
-        </aside>
-    </section>
 
-    <footer class="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[min(95vw,64rem)]">
-        <div id="attachment-preview" class="flex gap-2 mb-2"></div>
-        <div class="mb-2 flex flex-wrap gap-1.5" id="quick-modes"></div>
-        <div id="composer" class="glass-panel rounded-2xl p-2.5 flex items-center gap-2 listening-mode">
-            <button aria-label="Open advanced studio" class="w-10 h-10 rounded-full hover:bg-white/10 text-white/60 hover:text-white" onclick="openStudio(true)" title="Advanced Studio">
-                <i class="fas fa-sliders"></i>
-            </button>
-            <button aria-label="Attach file" class="w-10 h-10 rounded-full hover:bg-white/10 text-white/60 hover:text-white" onclick="triggerAttach()" title="Attach">
-                <i class="fas fa-paperclip"></i>
-            </button>
-            <button id="voice-btn" aria-label="Toggle voice input" class="w-10 h-10 rounded-full hover:bg-white/10 text-white/60 hover:text-white" onclick="toggleVoice()" title="Voice">
-                <i class="fas fa-microphone"></i>
-            </button>
-            <input id="intent-input" type="text" class="flex-1 bg-transparent outline-none border-0 text-white placeholder-white/30 px-2" placeholder="พิมพ์สิ่งที่ต้องการ..." oninput="enterListening()" onkeydown="handleKeyDown(event)">
-            <button class="bg-blue-500/25 border border-blue-300/40 text-blue-100 px-4 py-2 rounded-xl font-mono text-xs" onclick="emitIntent()">Create</button>
-        </div>
-        <div id="ux-state" class="mt-2 text-center text-xs text-white/60"></div>
-    </footer>
 
-    <script>
-        const STARTER_PROMPTS = [
-            { label: 'สร้างภาพ', intent: 'สร้างภาพ key visual สำหรับ launch campaign โทน cinematic blue' },
-            { label: 'สร้าง UI concept', intent: 'สร้าง UI concept หน้า dashboard แบบ calm futuristic สำหรับ product analytics' },
-            { label: 'ค้นหา', intent: 'ค้นหาเทรนด์ AI interface ล่าสุดและสรุป insight ที่ใช้ได้จริง 3 ข้อ' },
-            { label: 'ควบคุมแสง', intent: 'ควบคุมแสงให้เป็นโหมด focus ตอนทำงานลึก และ calm ตอนพักสายตา' }
-        ];
+  <aside class="hud window" id="blueprint" data-window-key="blueprint">
+    <div><strong>BLUEPRINT OF LIVING LIGHT</strong><span class="lock-badge">LOCKED AXIS</span></div>
+    <div class="blueprint-meta" id="blueprint-meta"></div>
+    <ul class="blueprint-list" id="blueprint-list"></ul>
+  </aside>
 
-        const QUICK_MODES = [
-            { key: 'pure_light', text: 'Pure Light' },
-            { key: 'image', text: 'Image' },
-            { key: 'search', text: 'Search' },
-            { key: 'video', text: 'Motion' }
-        ];
+  <aside class="hud window" id="compat" data-window-key="compat">
+    <div><strong>COMPATIBILITY RENDER</strong></div>
+    <div class="compat-note" id="compat-note">mode: realtime</div>
+    <img id="compat-frame" alt="compatibility-frame" />
+  </aside>
 
-        const container = document.getElementById('canvas-container');
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        container.appendChild(renderer.domElement);
+  <section id="display-page-2" aria-label="display page two">
+    <div class="display2-card">
+      <div><strong>DISPLAY PAGE 2</strong></div>
+      <div style="margin-top:6px;color:#b8daff;font-size:12px;">This page is an auxiliary display mode that preserves all core system capabilities.</div>
+      <div class="display2-grid">
+        <div class="display2-cell">State: <span id="page2-state">IDLE</span></div>
+        <div class="display2-cell">Energy: <span id="page2-energy">100%</span></div>
+        <div class="display2-cell">Entropy: <span id="page2-entropy">0%</span></div>
+      </div>
+    </div>
+  </section>
 
-        const qualityTier = window.matchMedia('(max-width: 768px), (pointer: coarse)').matches ? 'mobile' : 'desktop';
-        const particleCount = qualityTier === 'mobile' ? 9000 : 18000;
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(particleCount * 3);
-        const targets = new Float32Array(particleCount * 3);
-        const colors = new Float32Array(particleCount * 3);
+  <section class="mini-boxes" aria-label="mini display boxes">
+    <div class="mini-box" id="mini-box-1">Mini Box 1 : System Pulse</div>
+    <div class="mini-box" id="mini-box-2">Mini Box 2 : Intent Monitor</div>
+    <div class="mini-box" id="mini-box-3">Mini Box 3 : Source Signals</div>
+  </section>
 
-        for (let i = 0; i < particleCount; i++) {
-            const i3 = i * 3;
-            const x = (Math.random() - 0.5) * 60;
-            const y = (Math.random() - 0.5) * 60;
-            const z = (Math.random() - 0.5) * 60;
-            positions[i3] = targets[i3] = x;
-            positions[i3 + 1] = targets[i3 + 1] = y;
-            positions[i3 + 2] = targets[i3 + 2] = z;
-            colors[i3] = 0.08; colors[i3 + 1] = 0.12; colors[i3 + 2] = 0.2;
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script>
+    const canvas = document.getElementById('nervous-system');
+    const ctx = canvas.getContext('2d');
+
+    const palette = {
+      IDLE: '#00ffff',
+      LISTENING: '#00ffff',
+      PROCESSING: '#800080',
+      RESONATING: '#ffd700',
+      NIRODHA: '#00008b',
+      CRITICAL: '#dc143c',
+      DECAY: '#a52a2a'
+    };
+
+    const fsm = {
+      state: 'IDLE',
+      energy: 100,
+      entropy: 8,
+      load: 5,
+      shape: 'cloud',
+      intentCategory: 'chat',
+      turbulence: 0.18,
+      particleDensity: 0.45,
+      emotionalValence: 0,
+      energyLevel: 0.2,
+      desiredForm: 'abstract',
+      sourceHints: [],
+      qualityTier: 'auto',
+      targetFps: 60
+    };
+
+    const refs = {
+      stateText: document.getElementById('state-text'),
+      energyText: document.getElementById('energy-text'),
+      entropyText: document.getElementById('entropy-text'),
+      loadText: document.getElementById('load-text'),
+      energyBar: document.getElementById('energy-bar'),
+      entropyBar: document.getElementById('entropy-bar'),
+      loadBar: document.getElementById('load-bar'),
+      shapeChip: document.getElementById('shape-chip'),
+      intentChip: document.getElementById('intent-chip'),
+      qualityChip: document.getElementById('quality-chip'),
+      gateChip: document.getElementById('gate-chip'),
+      json: document.getElementById('intent-json'),
+      systemTab: document.getElementById('system-tab-btn'),
+      compatNote: document.getElementById('compat-note'),
+      compatFrame: document.getElementById('compat-frame'),
+      chatStream: document.getElementById('chat-stream'),
+      sources: document.getElementById('sources'),
+      settingsToggle: document.getElementById('settings-toggle'),
+      chatToggle: document.getElementById('chat-toggle'),
+      displayPage2State: document.getElementById('page2-state'),
+      displayPage2Energy: document.getElementById('page2-energy'),
+      displayPage2Entropy: document.getElementById('page2-entropy'),
+      blueprintMeta: document.getElementById('blueprint-meta'),
+      blueprintList: document.getElementById('blueprint-list'),
+      voiceButton: document.getElementById('voice-btn'),
+      voiceStatus: document.getElementById('voice-status'),
+      tabs: Array.from(document.querySelectorAll('.tab-btn')),
+      tabContents: Array.from(document.querySelectorAll('.settings-tab')),
+      panelToggles: Array.from(document.querySelectorAll('.panel-toggle')),
+      analyzeUrlBtn: document.getElementById('analyze-url-btn'),
+      externalUrl: document.getElementById('external-url'),
+      urlStatus: document.getElementById('url-status'),
+      displayLanguage: document.getElementById('display-language'),
+      understandingLanguage: document.getElementById('understanding-language'),
+      voiceMode: document.getElementById('voice-mode'),
+      voiceRegion: document.getElementById('voice-region'),
+      voiceTelemetry: document.getElementById('voice-telemetry')
+    };
+
+    const panelRegistry = {
+      settings: document.getElementById('settings-panel'),
+      log: document.getElementById('log'),
+      conversation: document.getElementById('conversation'),
+      composer: document.getElementById('composer'),
+      blueprint: document.getElementById('blueprint'),
+      compat: document.getElementById('compat')
+    };
+
+    const telemetry = {
+      urlAnalyses: 0,
+      voiceCommands: 0,
+      panelClosed: 0,
+      languageChanges: 0,
+      events: []
+    };
+
+    const commandBus = (() => {
+      const listeners = new Map();
+      return {
+        on(eventName, handler) {
+          if (!listeners.has(eventName)) listeners.set(eventName, new Set());
+          listeners.get(eventName).add(handler);
+        },
+        emit(eventName, payload = {}) {
+          telemetry.events.push({ eventName, at: Date.now(), payload });
+          if (telemetry.events.length > 200) telemetry.events.shift();
+          const handlers = listeners.get(eventName) || [];
+          handlers.forEach(handler => handler(payload));
         }
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -451,12 +945,155 @@
             if (/ภาพ|image|poster|visual|ui/.test(lower)) return 'image';
             return route || 'pure_light';
         }
+      };
+    }
 
-        function mapGoalType(mode) {
-            if (mode === 'video') return 'video';
-            if (mode === 'image') return 'image';
-            if (mode === 'search') return 'search';
-            return 'pure_light';
+    function applyIntent(vector) {
+      applyDeltaState(fsm, {
+        intentCategory: vector.intent_category,
+        energyLevel: vector.energy_level,
+        turbulence: vector.visual_parameters.turbulence,
+        particleDensity: vector.visual_parameters.particle_density,
+        emotionalValence: vector.emotional_valence,
+        desiredForm: vector.visual_parameters.base_shape,
+        load: clamp(fsm.load + vector.energy_level * 38, 0, 100),
+        entropy: clamp(fsm.entropy + vector.energy_level * 26, 0, 100),
+        energy: clamp(fsm.energy - vector.energy_level * 9, 0, 100),
+        state: 'PROCESSING'
+      });
+
+      if (vector.visual_parameters.base_shape === 'cracks') {
+        fsm.shape = 'cloud';
+        fsm.state = 'CRITICAL';
+      } else {
+        fsm.shape = vector.visual_parameters.base_shape;
+      }
+
+      const targetCount = Math.floor(220 + fsm.particleDensity * 980);
+      particles = Array.from({ length: targetCount }, () => new Particle());
+
+      refs.json.textContent = JSON.stringify(vector, null, 2);
+    }
+
+    function addBubble(role, message) {
+      const p = document.createElement('p');
+      p.className = `bubble ${role}`;
+      p.textContent = `${role === 'user' ? 'USER' : 'SYSTEM'}: ${message}`;
+      refs.chatStream.prepend(p);
+      while (refs.chatStream.children.length > 10) refs.chatStream.removeChild(refs.chatStream.lastChild);
+    }
+
+    async function fetchReferenceSignals(text) {
+      const q = encodeURIComponent(text.trim().slice(0, 80));
+      if (!q) return [];
+      try {
+        const api = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${q}&limit=3&namespace=0&format=json&origin=*`;
+        const res = await fetch(api);
+        if (!res.ok) return [];
+        const data = await res.json();
+        const titles = (data && data[1]) || [];
+        return titles.filter(Boolean).slice(0, 3);
+      } catch (_) {
+        return [];
+      }
+    }
+
+    async function processUserInput(text) {
+      addBubble('user', text);
+      fsm.state = 'LISTENING';
+      await processTranscript(text, 'text');
+    }
+
+    function renderHUD() {
+      refs.stateText.textContent = fsm.state;
+      refs.energyText.textContent = `${Math.round(fsm.energy)}%`;
+      refs.entropyText.textContent = `${Math.round(fsm.entropy)}%`;
+      refs.loadText.textContent = `${Math.round(fsm.load)}%`;
+
+      refs.energyBar.style.width = `${fsm.energy}%`;
+      refs.entropyBar.style.width = `${fsm.entropy}%`;
+      refs.loadBar.style.width = `${fsm.load}%`;
+
+      refs.energyBar.style.backgroundColor = palette[fsm.state] || palette.IDLE;
+      refs.entropyBar.style.backgroundColor = '#00ffff';
+      refs.loadBar.style.backgroundColor = fsm.load > 65 ? '#ffd700' : '#ffffff';
+
+      refs.shapeChip.textContent = `shape: ${fsm.shape}`;
+      refs.intentChip.textContent = `intent: ${fsm.intentCategory}`;
+      refs.qualityChip.textContent = `quality: ${fsm.qualityTier} @${fsm.targetFps}fps`;
+      refs.gateChip.textContent = refs.gateChip.textContent || 'gate: accept';
+
+      refs.displayPage2State.textContent = fsm.state;
+      refs.displayPage2Energy.textContent = `${Math.round(fsm.energy)}%`;
+      refs.displayPage2Entropy.textContent = `${Math.round(fsm.entropy)}%`;
+
+      refs.systemTab.classList.toggle('critical', fsm.state === 'CRITICAL');
+      refs.compatNote.textContent = compatMode
+        ? 'mode: compatibility (deterministic SVG snapshots every 500ms)'
+        : 'mode: realtime';
+    }
+
+    function renderCompatFrame() {
+      const stroke = palette[fsm.state] || palette.IDLE;
+      const energy = Math.round(fsm.energy);
+      const entropy = Math.round(fsm.entropy);
+      const load = Math.round(fsm.load);
+
+      const svg = `
+<svg xmlns='http://www.w3.org/2000/svg' width='640' height='180' viewBox='0 0 640 180'>
+  <rect width='640' height='180' fill='#050505'/>
+  <text x='16' y='26' fill='#ffffff' font-size='14' font-family='monospace'>AETHERIUM COMPAT FRAME</text>
+  <text x='16' y='48' fill='${stroke}' font-size='13' font-family='monospace'>STATE: ${fsm.state}</text>
+  <rect x='16' y='64' width='608' height='10' fill='#222'/>
+  <rect x='16' y='64' width='${(608 * energy) / 100}' height='10' fill='${stroke}'/>
+  <text x='16' y='90' fill='#00ffff' font-size='12' font-family='monospace'>ENERGY ${energy}%</text>
+  <text x='180' y='90' fill='#00ffff' font-size='12' font-family='monospace'>ENTROPY ${entropy}%</text>
+  <text x='360' y='90' fill='#ffd700' font-size='12' font-family='monospace'>LOAD ${load}%</text>
+  <text x='16' y='116' fill='#cccccc' font-size='12' font-family='monospace'>shape=${fsm.shape} intent=${fsm.intentCategory}</text>
+  <circle cx='580' cy='112' r='18' fill='none' stroke='${stroke}' stroke-width='2'/>
+  <circle cx='580' cy='112' r='${4 + (fsm.energyLevel * 12)}' fill='${stroke}' opacity='0.7'/>
+  <text x='16' y='144' fill='#9db5ff' font-size='11' font-family='monospace'>Designed for low-feature / unstable headless environments.</text>
+</svg>`;
+      refs.compatFrame.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    }
+
+    function detectCompatibilityMode() {
+      const params = new URLSearchParams(window.location.search);
+      const forceCompat = params.get('render') === 'compat';
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      compatMode = Boolean(forceCompat || reduceMotion);
+      if (compatMode) {
+        fsm.shape = 'sphere';
+        fsm.turbulence = 0.08;
+      }
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = 'rgba(5,5,8,0.24)';
+      ctx.fillRect(0, 0, width, height);
+
+      if (fsm.state === 'NIRODHA') {
+        ctx.fillStyle = 'rgba(0, 0, 139, 0.06)';
+        ctx.fillRect(0, 0, width, height);
+      }
+    }
+
+    let lastFrameAt = 0;
+    function tick(t) {
+      const frameInterval = 1000 / Math.max(12, fsm.targetFps || 60);
+      if (t - lastFrameAt < frameInterval) {
+        requestAnimationFrame(tick);
+        return;
+      }
+      lastFrameAt = t;
+
+      drawBackground();
+      evolveState();
+
+      if (!compatMode) {
+        for (const p of particles) {
+          p.update(t);
+          p.draw();
         }
 
         async function requestVariationSet(intent, mode) {
