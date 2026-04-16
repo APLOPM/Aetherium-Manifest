@@ -23,12 +23,11 @@ Core runtime paths remain unchanged:
 
 ## Local/dev paths remain available
 
-เส้นทาง local/dev ที่มีอยู่แล้วใน repository ยังคงใช้งานได้:
+You can continue to run and validate the project without those repository automations:
 
-- เส้นทางการปรับใช้ Docker Compose/แบบแมนนวลที่มีอยู่แล้วนั้น ได้มีการบันทึกไว้ใน repository แล้ว
-- เรียกใช้งานด้วยตนเองในเครื่อง (`python3 -m http.server 4173`, FastAPI/Uvicorn flow ใน `api_gateway/`)
-- เส้นทางการเริ่มต้นบริการด้วย Docker Compose หรือแบบแมนนวล ที่มีอยู่แล้วนั้น ได้มีการบันทึกไว้ใน repository แล้ว
-- การตรวจสอบสัญญาและการตรวจสอบขณะทำงานยังคงสามารถดำเนินการได้โดยตรงจากคำสั่งภายในเครื่อง
+- Manual local run (Frontend: python3 -m http.server 4173, API: uvicorn api_gateway.main:app --port 8080)
+- Existing Docker Compose or manual service startup paths already documented in-repo
+- Contract and runtime checks can still be run directly from local commands
 
 ## Branch protection reminder
 
