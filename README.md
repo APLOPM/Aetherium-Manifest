@@ -1,55 +1,140 @@
 # Aetherium Manifest
 
-Aetherium Manifest is a real-time, light-first runtime that maps intent/state signals into readable manifestation output. The homepage is intentionally minimal: a full-screen light field, one composer, and one Settings entry point.
+Aetherium Manifest is a **light-native cognition runtime**: intent is interpreted into deterministic light/particle manifestation with a governor-first safety boundary.
 
-## What is in this repository
+## What changed in this iteration
+- Home is now a **pure light-native scene** (canvas + Settings entry only).
+- Structural UI (composer, runtime controls, voice, connection, export) is moved into **Settings**.
+- Input event handling was modernized to correctly support **IME composition** (Thai/Japanese/etc.) using composition lifecycle + `beforeinput/input` paths, and now blocks accidental Enter-submit from browser IME process-key events (e.g. `keyCode=229`).
 
-- **Clean first-use surface (default):** calm visual field + language-aware response orchestration + luminous text manifestation.
-- **FastAPI prototype gateway:** validation/emit endpoints and websocket stream under `api_gateway/`.
-- **Contract-first schemas + governance runtime:** deterministic policy and compatibility path.
-- **Tooling:** contract checks, fuzzing, benchmark scripts, and parity tests.
+---
 
-## First-use surface contract
+## Architecture
 
-The first view intentionally renders only:
+### Runtime planes
+1. **First-use surface (static frontend)**
+   - `index.html`
+   - `clean-first-surface.css`
+   - `clean-first-surface.js`
+   - `first_use_surface/*`
 
-- Full-screen manifestation canvas.
-- Minimal bottom composer.
-- One Settings button.
-- Subtle human-readable status + readable text fallback.
+2. **Gateway plane (FastAPI / WS / distributed adapters)**
+   - `api_gateway/` and top-level gateway helpers
+   - request/validation endpoints for emit/validate
 
-Advanced panels and technical controls (telemetry, lineage/replay, scholar/debug/runtime tools, connection settings, language/voice options) are available **inside Settings only**.
+3. **Governor plane (canonical control boundary)**
+   - `governor/`
+   - deny-by-default runtime mutation authority
 
-See details: [`docs/clean_first_use_surface.md`](docs/clean_first_use_surface.md).
+4. **Contracts + tooling plane**
+   - JSON Schemas (root + `docs/schemas/`)
+   - contract checker/fuzzer + drift guard (`tools/contracts/`)
+   - semantic/latency benchmarks (`tools/benchmarks/`)
 
-## Run locally
+### Canonical control boundary
+System behavior should preserve this sequence:
 
-```bash
-python3 -m http.server 4173
-# open http://localhost:4173
+`validate → transition → profile_map → clamp → fallback → policy_block → capability_gate → telemetry_log`
+
+This path is the source of truth for safe runtime mutation.
+
+---
+
+## Contracts
+
+Core contracts/schemas in this repo include:
+- `particle-control.schema.json`
+- `lcl_schema.json`
+- `governor/particle-control.schema.json`
+- `governor/scholar_contract_v1.json`
+- `docs/schemas/*.json` (versioned copies/documentation views)
+
+### Contract policy
+- Treat schema changes as **ABI changes**.
+- Maintain compatibility/versioning discipline.
+- Keep runtime governor behavior synchronized with contract evolution.
+
+---
+
+## Runtime flow
+
+### Intent-to-light flow (first-use surface)
+1. User opens Settings and submits text from the Interaction composer.
+2. Language layer resolves language deterministically:
+   - explicit setting → browser locale → char heuristics → optional local detector → session memory
+3. Response orchestrator maps intent class (greeting/question/etc.) to deterministic text+mood.
+4. Manifestation engine renders mood/text into the light scene.
+5. Session audit trail appends event metadata (optional export from Settings).
+
+### Gateway/governor integration flow (full stack)
+1. Emit payload is validated against contract.
+2. Governor applies transition/profile mapping and constraints.
+3. Capability + policy gates enforce deny-by-default behavior.
+4. Runtime output and telemetry are published to consumers.
+
+### Runtime control stages
+`validate → transition → profile_map → clamp → fallback → policy_block → capability_gate → telemetry_log`
+
+- `validate`: schema + semantic checks
+- `transition`: state machine handoff
+- `profile_map`: safe perceptual mapping profile
+- `clamp`: hard caps for energy/particle/control limits
+- `fallback`: deterministic safe degradation path
+- `policy_block`: deny-by-default policy enforcement
+- `capability_gate`: runtime/environment capability checks
+- `telemetry_log`: deterministic observability trail
+
+---
+
+## Grammar (LCL summary)
+
+The Light Control Language (LCL) shape is defined in `light-control-language.ts` and `lcl_schema.json`.
+
+### High-level grammar-like view
+```txt
+LCL := {
+  version,
+  intent,
+  morphology,
+  motion,
+  optics,
+  content,
+  constraints,
+  source_text,
+  retrieved_formation?,
+  particle_control
+}
+
+intent := create_light_form | create_glyph | create_scene
+optics.color_mode := monochrome | palette | source_radiance
 ```
 
-## API gateway (prototype)
+### Key semantic groups
+- **morphology**: form family/symmetry/density/scale/edge softness
+- **motion**: archetype/flow/coherence/turbulence/rhythm/attack/settle
+- **optics**: palette/luminance/glow/trail/color mode
+- **constraints**: max targets/photons/energy hard limits
+- **particle_control**: low-level runtime-safe control envelope
 
-```bash
-cd api_gateway
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
 
-Endpoints:
+### Formal grammar references
+- AETH grammar (EBNF): `docs/aeth/spec/grammar.ebnf`
+- AETH semantics/versioning: `docs/aeth/spec/semantics.md`, `docs/aeth/spec/versioning.md`
+- LCL JSON schema: `lcl_schema.json`
 
-- `POST /api/v1/cognitive/emit`
-- `POST /api/v1/cognitive/validate`
-- `GET /health`
-- `WS /ws/cognitive-stream`
+---
 
-## Core checks
+## Local development & checks
 
+### Recommended minimum before PR
 ```bash
 npm run lint
+cd api_gateway && pytest -q
+python3 tools/contracts/contract_checker.py
+```
+
+### Extended verification set
+```bash
 cd api_gateway && pytest -q
 python3 tools/contracts/contract_checker.py
 python3 tools/contracts/contract_fuzz.py
@@ -57,9 +142,9 @@ python3 tools/benchmarks/runtime_semantic_benchmark.py --input tools/benchmarks/
 npx --yes tsx --test test_runtime_governor_psycho_safety.test.ts
 ```
 
-## Audit backlog policy
+---
 
-Completed recommendations must be removed from backlog documents to avoid mixing done work with pending work:
-
-- English: [`docs/CODEBASE_AUDIT_TASKS_EN.md`](docs/CODEBASE_AUDIT_TASKS_EN.md)
-- Thai: [`docs/CODEBASE_AUDIT_TASKS_TH.md`](docs/CODEBASE_AUDIT_TASKS_TH.md)
+## Notes
+- Frontend remains static-host friendly; no mandatory bundle step in-repo.
+- Prototype telemetry persistence is intentionally non-durable by default.
+- Production hardening should include persistent telemetry storage, key rotation, and compatibility gates.
