@@ -2,11 +2,6 @@
 
 Aetherium Manifest is a **light-native cognition runtime**: intent is interpreted into deterministic light/particle manifestation with a governor-first safety boundary.
 
-## What changed in this iteration
-- Home is now a **pure light-native scene** (canvas + Settings entry only).
-- Structural UI (composer, runtime controls, voice, connection, export) is moved into **Settings**.
-- Input event handling was modernized to correctly support **IME composition** (Thai/Japanese/etc.) using composition lifecycle + `beforeinput/input` paths, and now blocks accidental Enter-submit from browser IME process-key events (e.g. `keyCode=229`).
-
 ---
 
 ## Architecture
@@ -128,7 +123,6 @@ optics.color_mode := monochrome | palette | source_radiance
 
 ### Recommended minimum before PR
 ```bash
-npm run lint
 cd api_gateway && pytest -q
 python3 tools/contracts/contract_checker.py
 ```
