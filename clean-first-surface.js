@@ -1,6 +1,5 @@
 import { createLanguageLayer } from './first_use_surface/language-layer.js';
 import { createLightManifestation } from './first_use_surface/light-manifestation.js';
-import { routeLightResponse } from './first_use_surface/response-orchestrator.js';
 import {
   markCompositionEnd,
   markCompositionStart,
@@ -9,6 +8,17 @@ import {
 } from './first_use_surface/input-event-policy.js';
 
 const STORAGE_KEY = 'aetherium:first-surface-settings:v1';
+const DEFAULT_INTENT_TIMEOUT_MS = 10000;
+const CONNECTION_STATES = Object.freeze({
+  CONNECTED: 'CONNECTED',
+  RECONNECTING: 'RECONNECTING',
+  DISCONNECTED: 'DISCONNECTED',
+});
+
+function createSessionId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `session_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
 
 const elements = {
   canvas: document.getElementById('manifestation-canvas'),
@@ -22,6 +32,7 @@ const elements = {
   settingsToggle: document.getElementById('settings-toggle'),
   closeSettings: document.getElementById('close-settings'),
   voiceCaptureButton: document.getElementById('voice-capture'),
+  connectionStatus: document.getElementById('connection-status'),
 };
 
 const defaultSettings = {
@@ -67,6 +78,36 @@ const voiceRuntime = {
   recognition: null,
 };
 
+const connectionRuntime = {
+  socket: null,
+  reconnectTimer: null,
+  reconnectAttempts: 0,
+  shouldReconnect: true,
+  url: '',
+};
+
+const sysState = {
+  state: '',
+  energyLevel: 0,
+  entropyLevel: 0,
+  palette: {
+    primary: '#7FE4FF',
+    secondary: '#EBF9FF',
+  },
+  target: {
+    energyLevel: 0,
+    entropyLevel: 0,
+    turbulence: 0,
+    flow: 0,
+    shape: 0,
+  },
+  future: {
+    turbulence: 0,
+    flow: 0,
+    shape: 0,
+  },
+};
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -82,6 +123,7 @@ function persistSettings() {
 }
 
 const settings = loadSettings();
+const sessionId = createSessionId();
 const sessionAudit = [];
 const languageLayer = createLanguageLayer(settings);
 const manifestationEngine = createLightManifestation(elements.canvas, settings.reducedMotion);
@@ -96,6 +138,13 @@ function localizedUI(key) {
 
 function setStatus(statusText) {
   elements.statusText.textContent = statusText;
+}
+
+function setConnectionStatus(state) {
+  if (!elements.connectionStatus) return;
+  const normalizedState = CONNECTION_STATES[state] ?? CONNECTION_STATES.DISCONNECTED;
+  elements.connectionStatus.textContent = normalizedState;
+  elements.connectionStatus.dataset.connectionState = normalizedState.toLowerCase();
 }
 
 function setReadableFallback(text) {
@@ -114,6 +163,269 @@ function pushSessionEvent(payload) {
   });
 }
 
+function resolveWsUrl(inputUrl = '') {
+  const source = inputUrl.trim() || settings.wsBase;
+  if (!source) return '';
+
+  if (/^wss?:\/\//i.test(source)) return source;
+  if (/^https?:\/\//i.test(source)) {
+    return source.replace(/^http/i, 'ws');
+  }
+
+  const base = new URL(window.location.href);
+  const wsProtocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${wsProtocol}//${base.host}${source.startsWith('/') ? source : `/${source}`}`;
+}
+
+function nextReconnectDelayMs(attempt) {
+  return Math.min(8000, 2000 * (2 ** Math.max(0, attempt - 1)));
+}
+
+function clearReconnectTimer() {
+  if (connectionRuntime.reconnectTimer === null) return;
+  window.clearTimeout(connectionRuntime.reconnectTimer);
+  connectionRuntime.reconnectTimer = null;
+}
+
+function parseWsPayload(rawMessage) {
+  if (typeof rawMessage !== 'string') return null;
+  try {
+    return JSON.parse(rawMessage);
+  } catch {
+    console.warn('Dropped non-JSON WS message', { rawMessage });
+    return null;
+  }
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function clampVisualLevel(value) {
+  return clamp(value, 0, 1.5);
+}
+
+function clampFutureLevel(value) {
+  return clamp(value, 0, 1);
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizePaletteValue(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim();
+  return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(normalized) ? normalized : fallback;
+}
+
+function validateIncomingStateSchema(payload) {
+  if (!isRecord(payload)) {
+    return { ok: false, reason: 'payload must be an object' };
+  }
+
+  const { state, visual } = payload;
+  if (typeof state !== 'string' || !state.trim()) {
+    return { ok: false, reason: 'payload.state must be a non-empty string' };
+  }
+
+  if (!isRecord(visual)) {
+    return { ok: false, reason: 'payload.visual must be an object' };
+  }
+
+  if (typeof visual.energy !== 'number' || !Number.isFinite(visual.energy)) {
+    return { ok: false, reason: 'payload.visual.energy must be a finite number' };
+  }
+
+  if (typeof visual.entropy !== 'number' || !Number.isFinite(visual.entropy)) {
+    return { ok: false, reason: 'payload.visual.entropy must be a finite number' };
+  }
+
+  if (!isRecord(visual.color_palette)) {
+    return { ok: false, reason: 'payload.visual.color_palette must be an object' };
+  }
+
+  if (typeof visual.color_palette.primary !== 'string') {
+    return { ok: false, reason: 'payload.visual.color_palette.primary must be a string' };
+  }
+
+  if (typeof visual.color_palette.secondary !== 'string') {
+    return { ok: false, reason: 'payload.visual.color_palette.secondary must be a string' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      state: state.trim(),
+      visual: {
+        energy: clampVisualLevel(visual.energy),
+        entropy: clampVisualLevel(visual.entropy),
+        color_palette: {
+          primary: sanitizePaletteValue(visual.color_palette.primary, '#7FE4FF'),
+          secondary: sanitizePaletteValue(visual.color_palette.secondary, '#EBF9FF'),
+        },
+        turbulence: Number.isFinite(visual.turbulence) ? clampFutureLevel(visual.turbulence) : undefined,
+        flow: Number.isFinite(visual.flow) ? clampFutureLevel(visual.flow) : undefined,
+        shape: Number.isFinite(visual.shape) ? clampFutureLevel(visual.shape) : undefined,
+      },
+    },
+  };
+}
+
+function setSystemState(mode) {
+  sysState.state = typeof mode === 'string' ? mode.trim() : '';
+  document.documentElement.dataset.systemState = sysState.state.toLowerCase();
+}
+
+function updateVisualIndicators() {
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty('--system-energy-level', String(clamp(sysState.energyLevel, 0, 1.5)));
+  rootStyle.setProperty('--system-entropy-level', String(clamp(sysState.entropyLevel, 0, 1.5)));
+  rootStyle.setProperty('--system-palette-primary', sysState.palette.primary);
+  rootStyle.setProperty('--system-palette-secondary', sysState.palette.secondary);
+}
+
+function applyVisualParameters(visual) {
+  const palette = {
+    primary: sanitizePaletteValue(visual.color_palette?.primary, '#7FE4FF'),
+    secondary: sanitizePaletteValue(visual.color_palette?.secondary, '#EBF9FF'),
+  };
+
+  sysState.target.energyLevel = clampVisualLevel(visual.energy);
+  sysState.target.entropyLevel = clampVisualLevel(visual.entropy);
+  sysState.target.turbulence = Number.isFinite(visual.turbulence)
+    ? clampFutureLevel(visual.turbulence)
+    : sysState.target.turbulence;
+  sysState.target.flow = Number.isFinite(visual.flow)
+    ? clampFutureLevel(visual.flow)
+    : sysState.target.flow;
+  sysState.target.shape = Number.isFinite(visual.shape)
+    ? clampFutureLevel(visual.shape)
+    : sysState.target.shape;
+
+  sysState.future = {
+    turbulence: sysState.target.turbulence,
+    flow: sysState.target.flow,
+    shape: sysState.target.shape,
+  };
+
+  sysState.palette = palette;
+  updateVisualIndicators();
+}
+
+function animate() {
+  const lerp = (current, target, factor) => current + ((target - current) * factor);
+
+  sysState.energyLevel = lerp(sysState.energyLevel, sysState.target.energyLevel, 0.08);
+  sysState.entropyLevel = lerp(sysState.entropyLevel, sysState.target.entropyLevel, 0.08);
+  updateVisualIndicators();
+  requestAnimationFrame(animate);
+}
+
+function handleIncomingState(payload) {
+  const validation = validateIncomingStateSchema(payload);
+  if (!validation.ok) {
+    console.warn('Non-fatal stream validation failure', {
+      reason: validation.reason,
+      payload,
+    });
+    return;
+  }
+
+  setSystemState(validation.value.state);
+  applyVisualParameters(validation.value.visual);
+
+  const fallbackText = payload?.text
+    ?? payload?.message
+    ?? payload?.intent_state?.state
+    ?? validation.value.state
+    ?? '';
+
+  if (fallbackText) {
+    manifestationEngine.manifestText(String(fallbackText), 'stream');
+    setReadableFallback(String(fallbackText));
+  }
+
+  pushSessionEvent({
+    session_id: sessionId,
+    transport: 'ws_state',
+    payload,
+  });
+}
+
+function scheduleReconnect() {
+  clearReconnectTimer();
+  if (!connectionRuntime.shouldReconnect || !connectionRuntime.url) {
+    setConnectionStatus('DISCONNECTED');
+    return;
+  }
+
+  connectionRuntime.reconnectAttempts += 1;
+  const delayMs = nextReconnectDelayMs(connectionRuntime.reconnectAttempts);
+  setConnectionStatus('RECONNECTING');
+  setStatus(`Reconnecting in ${Math.round(delayMs / 1000)}s`);
+
+  connectionRuntime.reconnectTimer = window.setTimeout(() => {
+    connectWS(connectionRuntime.url);
+  }, delayMs);
+}
+
+function connectWS(url) {
+  const resolvedUrl = resolveWsUrl(url);
+  connectionRuntime.url = resolvedUrl;
+  if (!resolvedUrl) {
+    connectionRuntime.shouldReconnect = false;
+    setConnectionStatus('DISCONNECTED');
+    setStatus('WS url is empty');
+    return;
+  }
+
+  clearReconnectTimer();
+
+  if (connectionRuntime.socket) {
+    connectionRuntime.shouldReconnect = false;
+    connectionRuntime.socket.close();
+    connectionRuntime.socket = null;
+  }
+
+  connectionRuntime.shouldReconnect = true;
+  setConnectionStatus('RECONNECTING');
+
+  const socket = new WebSocket(resolvedUrl);
+  connectionRuntime.socket = socket;
+
+  socket.onopen = () => {
+    connectionRuntime.reconnectAttempts = 0;
+    setConnectionStatus('CONNECTED');
+    setStatus('WS connected');
+  };
+
+  socket.onmessage = (event) => {
+    const payload = parseWsPayload(event.data);
+    if (payload !== null) {
+      handleIncomingState(payload);
+    }
+  };
+
+  socket.onclose = () => {
+    if (connectionRuntime.socket === socket) {
+      connectionRuntime.socket = null;
+    }
+    if (!connectionRuntime.shouldReconnect) {
+      setConnectionStatus('DISCONNECTED');
+      return;
+    }
+    scheduleReconnect();
+  };
+
+  socket.onerror = () => {
+    setConnectionStatus('RECONNECTING');
+    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+      socket.close();
+    }
+  };
+}
+
 function exportSessionAudit() {
   const payload = {
     exportedAt: new Date().toISOString(),
@@ -130,29 +442,73 @@ function exportSessionAudit() {
   URL.revokeObjectURL(url);
 }
 
-function submitIntent(intent) {
+async function emitIntent(intent) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), DEFAULT_INTENT_TIMEOUT_MS);
+
+  try {
+    const apiBase = settings.apiBase.replace(/\/$/, '');
+    const response = await fetch(`${apiBase}/intent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        intent,
+        session_id: sessionId,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(`Timeout after ${DEFAULT_INTENT_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function submitIntent(intent) {
   const text = intent.trim();
   if (!text) return;
 
   applySubmissionState(true);
-  setStatus(localizedUI('interpreting'));
+  setStatus('Intent sent');
 
-  const language = languageLayer.resolveLanguage(text);
-  const response = routeLightResponse(text, language);
+  try {
+    await emitIntent(text);
+    console.info('Intent sent', { session_id: sessionId });
+    setStatus('Awaiting stream update');
+    setReadableFallback('Awaiting stream update');
+    console.info('Awaiting stream update', { session_id: sessionId });
 
-  manifestationEngine.manifestText(response.text, response.mood);
-  setReadableFallback(response.text);
-  setStatus(response.status);
+    pushSessionEvent({
+      session_id: sessionId,
+      intent: text,
+      transport: 'intent_posted',
+    });
 
-  pushSessionEvent({
-    input: text,
-    language,
-    response,
-  });
-
-  elements.input.value = '';
-  persistSettings();
-  applySubmissionState(false);
+    elements.input.value = '';
+    persistSettings();
+  } catch (error) {
+    const transportError = `Transport error: ${error.message}`;
+    console.error(transportError);
+    setStatus(transportError);
+    setReadableFallback(transportError);
+    pushSessionEvent({
+      session_id: sessionId,
+      intent: text,
+      transport: 'intent_failed',
+      error: error.message,
+    });
+  } finally {
+    applySubmissionState(false);
+  }
 }
 
 function bindInputEvents() {
@@ -216,7 +572,14 @@ function bindSettings() {
       }
     }],
     ['api-base', 'change', (event) => { settings.apiBase = event.target.value.trim(); }],
-    ['ws-base', 'change', (event) => { settings.wsBase = event.target.value.trim(); }],
+    ['ws-base', 'change', (event) => {
+      settings.wsBase = event.target.value.trim();
+      const cfgWs = byId('cfg-ws');
+      if (cfgWs && !cfgWs.value.trim()) {
+        cfgWs.value = settings.wsBase;
+      }
+    }],
+    ['cfg-ws', 'change', (event) => { settings.wsBase = event.target.value.trim(); }],
     ['runtime-mode', 'change', (event) => { settings.runtimeMode = event.target.value; }],
     ['telemetry-toggle', 'change', (event) => { settings.telemetry = event.target.checked; }],
     ['lineage-toggle', 'change', (event) => { settings.lineage = event.target.checked; }],
@@ -245,11 +608,22 @@ function bindSettings() {
   byId('api-base').value = settings.apiBase;
   byId('ws-base').value = settings.wsBase;
   byId('runtime-mode').value = settings.runtimeMode;
+  if (byId('cfg-ws')) {
+    byId('cfg-ws').value = settings.wsBase;
+  }
   byId('telemetry-toggle').checked = settings.telemetry;
   byId('lineage-toggle').checked = settings.lineage;
   byId('scholar-toggle').checked = settings.scholar;
   byId('governor-toggle').checked = settings.governorDebug;
   byId('devtools-toggle').checked = settings.developerTools;
+  if (byId('btn-connect')) {
+    byId('btn-connect').addEventListener('click', () => {
+      const manualUrl = byId('cfg-ws')?.value?.trim() ?? settings.wsBase;
+      settings.wsBase = manualUrl || settings.wsBase;
+      persistSettings();
+      connectWS(manualUrl);
+    });
+  }
 }
 
 function setVoiceUiState(isListening) {
@@ -366,9 +740,12 @@ function bootstrap() {
   const bootLanguage = languageLayer.resolveLanguage('');
   settings.sessionLanguageMemory = bootLanguage;
   setStatus(localizedUI('ready'));
+  setConnectionStatus('DISCONNECTED');
   manifestationEngine.manifestText(bootLanguage === 'th' ? 'สวัสดี' : 'Hello', 'greeting');
   setReadableFallback(bootLanguage === 'th' ? 'สวัสดี' : 'Hello');
+  animate();
   requestAnimationFrame(manifestationEngine.render);
+  connectWS(settings.wsBase);
 }
 
 bootstrap();

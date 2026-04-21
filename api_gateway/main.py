@@ -12,11 +12,10 @@ import uuid
 import hashlib
 from datetime import datetime, timezone
 from statistics import mean
-from typing import Any, Literal
+from typing import Any, Dict, List, Literal, Optional, Union
 from urllib.parse import urlparse
 from collections import deque
 from contextlib import asynccontextmanager
-from typing import Dict, Optional, Union
 from enum import Enum
 
 from fastapi import FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect
@@ -241,18 +240,6 @@ class ExportResponse(BaseModel):
     created_at: datetime
     options: Dict[str, Any] = Field(default_factory=dict)
 
-# --- Validation ---
-
-class FirmaValidator:
-    @staticmethod
-    def validate_dsl_response(payload: CognitiveEmitRequest) -> tuple[bool, list[str]]:
-        violations: list[str] = []
-        visual = payload.model_response.visual_manifestation
-        primary = (visual.color_palette.primary or "").lower()
-        if primary == "#dc143c" and not visual.emergency_override:
-            violations.append("policy_violation: crimson_requires_emergency_override")
-        return len(violations) == 0, violations
-
 # --- App Initialization ---
 
 logger = logging.getLogger("api-gateway")
@@ -306,7 +293,6 @@ nc: Optional[nats.NATS] = None
 NONCE_CACHE: Dict[str, bool] = {}
 RUNTIME_GOVERNOR = RuntimeGovernor()
 EXPORT_AUDIT_TRAIL: deque[Dict[str, Any]] = deque(maxlen=1000)
-TELEMETRY_TS_DB: deque[dict[str, Any]] = deque(maxlen=10000)
 SEV1_INCIDENT_PACKAGES: list[str] = [
     name for name, package in INCIDENT_REPLAY_PACKAGES.items() if package.get("severity") == "sev1"
 ]
@@ -325,7 +311,7 @@ REQUIRED_PIPELINE_ORDER = [
 # --- In-memory State and Concurrency ---
 
 METRICS = Metrics()
-TELEMETRY_TS_DB: dict[str, list[dict[str, Any]]] = {}
+TELEMETRY_TS_DB: Dict[str, List[Dict[str, Any]]] = {}
 STATE_SYNC_ROOMS: dict[str, 'StateSyncRoom'] = {}
 
 METRICS_LOCK = asyncio.Lock()
@@ -432,14 +418,11 @@ async def invoke_generative_model(prompt: str, model: str, temperature: float) -
 # --- Helper Functions ---
 
 def _infer_intent_from_text(text: str) -> tuple[IntentVector, VisualManifestation]:
-    """วิเคราะห์ข้อความที่สร้างขึ้น เพื่อแปลงเป็น Intent Vector และ Visual Parameters"""
     length = len(text)
     
-    # 1. คำนวณ Energy Level (0.0 - 1.0) จากความยาวและเครื่องหมายอัศเจรีย์
     exclamations = len(re.findall(r'!', text))
     energy = min(1.0, 0.3 + (exclamations * 0.15) + (length / 1000.0))
     
-    # 2. คำนวณ Emotional Valence (-1.0 ถึง 1.0) โดยจำลองจากการตรวจจับคีย์เวิร์ด
     positive_words = ["ดี", "เยี่ยม", "ยินดี", "ความสุข", "สำเร็จ", "good", "great", "happy"]
     negative_words = ["แย่", "เสียใจ", "ผิดพลาด", "ปัญหา", "ขออภัย", "bad", "error", "sorry"]
     
@@ -452,26 +435,23 @@ def _infer_intent_from_text(text: str) -> tuple[IntentVector, VisualManifestatio
     elif neg_count > pos_count:
         valence = max(-1.0, (neg_count - pos_count) * -0.25)
         
-    # 3. กำหนด Category
     category = "narrative"
     if "?" in text:
         category = "inquiry"
     elif "!" in text:
         category = "exclamation"
 
-    # 4. แปลง Intent เป็นพารามิเตอร์ทางสายตา (Visual Manifestation)
-    primary_color = "#00FFFF"  # สีหลัก: Cyan (ปกติ/เป็นกลาง)
+    primary_color = "#00FFFF"
     if valence > 0.4:
-        primary_color = "#00FF00"  # สีเขียว (พลังงานบวก)
+        primary_color = "#00FF00"
     elif valence < -0.4:
-        primary_color = "#FF4500"  # สีส้มแดง (เชิงลบ/เตือนภัย)
+        primary_color = "#FF4500"
     
     if energy > 0.8:
-        primary_color = "#FFD700"  # สีทอง (พลังงานสูงมาก)
+        primary_color = "#FFD700"
         
-    # พลศาสตร์ของอนุภาคแสงอิงตามค่าพลังงาน
     turbulence = min(1.0, energy * 0.8)
-    particle_count = min(10000, int(2000 + (energy * 8000)))  # จำนวนจุดแสงตามพลังงาน
+    particle_count = min(10000, int(2000 + (energy * 8000)))
     
     intent = IntentVector(
         category=category,
@@ -480,7 +460,7 @@ def _infer_intent_from_text(text: str) -> tuple[IntentVector, VisualManifestatio
     )
     
     visual = VisualManifestation(
-        base_shape="fluid_typography", # บอก WebGL ว่าให้เรียงเป็นตัวอักษรแบบของไหล
+        base_shape="fluid_typography",
         transition_type="emerge",
         color_palette=ColorPalette(primary=primary_color, secondary="#FFFFFF"),
         particle_physics=ParticlePhysics(
@@ -490,7 +470,7 @@ def _infer_intent_from_text(text: str) -> tuple[IntentVector, VisualManifestatio
             particle_count=particle_count
         ),
         chromatic_mode="reactive",
-        device_tier=2 # ตั้งค่าเริ่มต้นให้รันบน Device ระดับกลาง
+        device_tier=2
     )
     
     return intent, visual
@@ -516,16 +496,6 @@ async def _metrics_snapshot() -> dict[str, Any]:
 async def _room(room_id: str) -> StateSyncRoom:
     async with ROOMS_LOCK:
         return STATE_SYNC_ROOMS.setdefault(room_id, StateSyncRoom())
-
-def _is_blocked_proxy_target(hostname: str) -> bool:
-    try:
-        for _, _, _, _, sockaddr in socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP):
-            address = ipaddress.ip_address(sockaddr[0])
-            if address.is_private or address.is_loopback or address.is_link_local:
-                return True
-    except socket.gaierror:
-        return True
-    return False
 
 def _semantic_from_intent(intent: IntentVector) -> SemanticField:
     category_hash = int(hashlib.sha1(intent.category.encode("utf-8")).hexdigest()[:6], 16) / 0xFFFFFF
@@ -627,24 +597,21 @@ async def generate_text(
     async with METRICS_LOCK:
         METRICS.generative_requests += 1
     try:
-        # 1. เรียกใช้งาน LLM ตามปกติเพื่อสร้างข้อความ
         generated_text = await invoke_generative_model(
             prompt=request.prompt,
             model=request.model,
             temperature=request.temperature
         )
         
-        # 2. ประมวลผล "สมการแห่งเจตจำนง" จากข้อความที่ได้
         intent_vec, visual_manifest = _infer_intent_from_text(generated_text)
         
-        # 3. ส่งข้อมูลทั้งหมดกลับให้หน้าบ้านนำไปร้อยเรียงแสง
         return GenerateResponse(
             text=generated_text,
             model=request.model,
             trace_id=str(uuid.uuid4()),
             provider=MODEL_PROVIDER_MAP.get(request.model, "unknown"),
-            intent_vector=intent_vec,               # <--- ส่งเวกเตอร์เจตจำนง
-            visual_manifestation=visual_manifest    # <--- ส่งสเปคของแสง
+            intent_vector=intent_vec,
+            visual_manifestation=visual_manifest
         )
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=f"Model provider error: {e.response.text}")
@@ -657,12 +624,17 @@ async def emit_cognitive_dsl(
     x_api_key: str | None = Header(None, alias="X-API-Key")
 ) -> dict[str, Any]:
     _ensure_api_key(x_api_key)
-    provider = request.model_metadata.model_name
-
+    
     async with METRICS_LOCK:
         METRICS.total_dsl_submissions += 1
-    passed, violations = FirmaValidator.validate_dsl_response(request)
-    if not passed:
+
+    violations: list[str] = []
+    visual = request.model_response.visual_manifestation
+    primary = (visual.color_palette.primary or "").lower()
+    if primary == "#dc143c" and not visual.emergency_override:
+        violations.append("policy_violation: crimson_requires_emergency_override")
+
+    if violations:
         async with METRICS_LOCK:
             METRICS.validation_failures += 1
         raise HTTPException(422, detail=ValidationResult(status="failed", violations=violations).model_dump())
@@ -677,8 +649,13 @@ async def validate_cognitive_dsl(
     x_api_key: str | None = Header(None, alias="X-API-Key"),
 ) -> ValidationResult:
     _ensure_api_key(x_api_key)
-    passed, violations = FirmaValidator.validate_dsl_response(request)
-    return ValidationResult(status="success" if passed else "failed", violations=violations)
+    violations: list[str] = []
+    visual = request.model_response.visual_manifestation
+    primary = (visual.color_palette.primary or "").lower()
+    if primary == "#dc143c" and not visual.emergency_override:
+        violations.append("policy_violation: crimson_requires_emergency_override")
+    
+    return ValidationResult(status="success" if not violations else "failed", violations=violations)
 
 @app.get("/health")
 def health_check() -> dict[str, Any]:
@@ -743,20 +720,6 @@ async def query_telemetry(
         "p95": p95,
         "latest": rows[-1] if rows else None,
     }
-    EXPORT_AUDIT_TRAIL.insert(0, audit_record)
-    return ExportResponse(
-        export_id=export_id,
-        session_id=request.session_id,
-        lineage_id=request.lineage_id,
-        selected_variation_id=request.selected_variation_id,
-        artifact_type=request.artifact_type,
-        status="accepted",
-        audit_trail_id=audit_trail_id,
-        replay_key=replay_key,
-        review_status="ready_for_enterprise_review",
-        created_at=created_at,
-        options=request.options,
-    )
 
 @app.get("/api/v1/export/history")
 async def export_history(
@@ -766,7 +729,7 @@ async def export_history(
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> Dict[str, Any]:
     _ensure_api_key(x_api_key)
-    records = EXPORT_AUDIT_TRAIL
+    records = list(EXPORT_AUDIT_TRAIL)
     if session_id:
         records = [record for record in records if record["session_id"] == session_id]
     if lineage_id:
@@ -774,6 +737,7 @@ async def export_history(
     if selected_variation_id:
         records = [record for record in records if record["selected_variation_id"] == selected_variation_id]
     return {"status": "success", "count": len(records), "history": records}
+
 
 def _resolve_voice_model(language: str, region: str) -> str:
     lang_key = language.split("-", maxsplit=1)[0].lower()
